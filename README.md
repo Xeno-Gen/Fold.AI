@@ -53,11 +53,9 @@ npm start
 Fold-AI/
 ├── 点我启动.bat       # Windows 一键启动脚本
 ├── server.js          # 主服务端
-├── app.js             # 前端逻辑
-├── index.html         # 主页面
 ├── Mod/               # 插件目录
 ├── data/              # 用户数据
-├── public/            # 公共文件
+├── public/app.js index.html       # 公共文件
 ├── ken/               # 须知文件
 └── com/               # 配置目录
 ```
