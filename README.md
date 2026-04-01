@@ -56,7 +56,7 @@ Double-click **`点我启动.bat`** — dependencies are installed and the serve
 ### Manual Launch
 
 ```bash
-cd your-project-directory
+cd fold
 npm install
 npm start
 ```
@@ -68,8 +68,7 @@ Visit `http://localhost:17923`
 ## 📁 Project Structure
 
 ```
-Fold-AI/
-├── 点我启动.bat       # Windows one-click startup script
+fold/
 ├── server.js          # Main server
 ├── Mod/               # Plugins directory
 ├── data/              # User data
