@@ -65,7 +65,7 @@ npm start / node server.js
 ```
 
 ## 📁 项目结构
-text
+```text
 fold/
 ├── server.js          # 主服务器
 ├── Mod/               # 插件目录
@@ -73,6 +73,7 @@ fold/
 ├── public/            # 公共文件
 ├── ken/               # 文档目录
 └── com/               # 配置文件
+```
 
 ## 📝 许可证
 MIT © Xeno-Gen
