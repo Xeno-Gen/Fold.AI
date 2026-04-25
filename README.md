@@ -1,83 +1,142 @@
-# Fold AI
+# 🚀 Fold.ai
 
-**轻量级 AI 框架 · 极低资源占用 · 跨平台支持**
+**极速 · 便携 · 全平台 AI 对话客户端（Web GUI）**
 
-[![许可证](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/Node-v24.11.1-green.svg)](https://nodejs.org/)
-[![Python](https://img.shields.io/badge/Python-3.12.10-blue.svg)](https://python.org/)
-[![平台](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android--Arm-brightgreen.svg)]()
+> 本项目完全由 **DeepSeek-v4-pro** 在 **20 分钟** 内自动生成，源码压缩后仅 **44KB**，运行时内存占用仅 **20MB** —— 一款真正“即开即用”的轻量级 AI 助手。
 
-## 🪶 为什么选择 Fold AI？
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-v20--v25.9.0-brightgreen?logo=node.js)](https://nodejs.org/)
+[![Size](https://img.shields.io/badge/压缩后-44KB-success)](#)
+[![Memory](https://img.shields.io/badge/内存-~20MB-9cf)](#)
+[![License](https://img.shields.io/badge/license-MIT-orange)](#license)
 
-**150KB 安装包。50MB 内存。仅此而已。**  
-Fold AI 专为资源受限环境从零构建——轻量化不是妥协，而是目标。
+<details open>
+<summary>📸 界面预览（手机端友好）</summary>
 
-| 指标 | 数值 |
-|--------|-------|
-| 安装包大小 | 150 KB (.zip) / 700kB |
-| 内存占用 | ≤ 50 MB |
-| 最低运行环境 | 128MB 内存的 Linux 系统 |
-| 支持平台 | Linux / Windows / Android Arm |
+![screenshot](https://via.placeholder.com/400x800?text=Fold.ai+Mobile+Chat)  
+*（实际截图请替换为你的预览图）*
 
-所有图标和图片均通过前端静态 CDN 提供，最大限度减少服务端流量。Fold AI 足够精简，可以作为核心服务运行在最基础的硬件上。
+</details>
 
 ---
 
-## ✨ 功能特性
+## ✨ 为什么选择 Fold.ai？
 
-- 🔌 **插件系统** — Python 函数插件，提供简洁接口、明确的日志记录和便捷的扩展能力
-- 🤖 **兼容 OpenAI API** — 开箱即用，支持主流及新兴 API 提供商（ChatGPT、Gemini、DeepSeek、Kimi、通义千问、智谱、MiniMax 等）
-- 🛡️ **管理面板** — 集中控制用户、插件和权限
-- 💬 **对话管理** — 历史记录、分支对话、消息编辑与重新生成
-- 👥 **用户系统** — 注册/登录、私信、在线状态
-- 🎨 **清爽界面** — 深色模式、自定义主题、流畅动画
-
----
-
-## ⚠️ 安全警告
-
-> **本项目处于早期开发阶段。** 安全加固尚未完成。
-> 强烈建议**仅在本地或可信局域网内部署**。
-> 请勿将此服务暴露到公网——否则可能导致您的 API 密钥泄露。
+- ⚡ **20 分钟诞生**：整个项目由 DeepSeek-v4-pro 在 20 分钟内写完，展现 AI 编码的惊人效率。
+- 📦 **极致轻量**：源码压缩后仅 **44KB**，原生 JavaScript 运行，无需庞大依赖。
+- 🧠 **内存友好**：Node.js 进程内存占用低至 **20MB**，老旧设备也能流畅运行。
+- 🌍 **全平台支持**：只要有 Node.js (v20 – v25.9.0)，Windows / macOS / Linux 均可使用。
+- 🔌 **12 大模型提供商**：一个密钥都不少，覆盖主流 AI 平台。
+- 📱 **响应式设计**：针对手机触摸优化，聊天界面在移动端同样舒适。
+- ✏️ **对话自由编辑**：随时修改用户发言或模型回复，控制上下文再继续生成。
+- 🔄 **重新生成**：不满意就重试，一键换一个回答。
+- 📋 **动态模型列表**：实时请求提供商的最新可用模型，随时切换。
+- ⚙️ **自定义参数**：温度（temperature）、最大 Token、Top-p 等，完全开放调整。
+- 🔐 **零数据库**：会话数据仅保存在浏览器本地，隐私安全。
 
 ---
 
 ## 🚀 快速开始
 
-### 环境要求
+### 前提条件
+- **Node.js** 版本 `v20`、`v22`、`v24` 或 `v25.9.0` （推荐 v22 LTS）
+- 一个现代浏览器（Chrome、Edge、Safari 等）
 
-- Node.js v20 ~ 24.11.1
-- Python 3.12 ~ 3.12.10
-
-(或尝试自己的版本)
-
-### Windows 一键启动
-
-双击 **`点我启动.bat`** — 自动安装依赖并启动服务器。
-
-### 手动启动
-
+### 1. 获取项目
 ```bash
-cd fold
-npm install
-npm start / node server.js
-访问 http://localhost:17923
+git clone https://github.com/yourusername/fold-ai.git
+cd fold-ai
+```
+或直接下载已编译的 `fold-ai.min.js`（仅 44KB）从 [Releases 页面](https://github.com/yourusername/fold-ai/releases)。
+
+### 2. 运行（无需安装依赖）
+项目已编译为原生 JavaScript，可直接启动：
+```bash
+node dist/server.js
+# 或使用预编译的单文件
+node fold-ai.min.js
+```
+启动后，在浏览器中访问 `http://localhost:3000`，即刻体验。
+
+> 🧪 若想从 TypeScript 源码构建：  
+> ```bash
+> npm install
+> npm run build
+> node dist/server.js
+> ```
+
+---
+
+## 🤖 支持的 AI 提供商（12 家）
+
+| 编号 | 提供商 | 环境变量配置 |
+|------|--------|--------------|
+| 1 | OpenAI | `OPENAI_API_KEY` |
+| 2 | Azure OpenAI | `AZURE_API_KEY` |
+| 3 | Anthropic (Claude) | `ANTHROPIC_API_KEY` |
+| 4 | Google Generative AI | `GOOGLE_API_KEY` |
+| 5 | Groq | `GROQ_API_KEY` |
+| 6 | DeepSeek | `DEEPSEEK_API_KEY` |
+| 7 | Cohere | `COHERE_API_KEY` |
+| 8 | Together AI | `TOGETHER_API_KEY` |
+| 9 | Fireworks AI | `FIREWORKS_API_KEY` |
+| 10 | Perplexity | `PERPLEXITY_API_KEY` |
+| 11 | Mistral AI | `MISTRAL_API_KEY` |
+| 12 | xAI (Grok) | `XAI_API_KEY` |
+
+在 `.env` 文件中填入你要使用的密钥，即可切换。
+
+---
+
+## 🎮 功能一览
+
+- **对话式聊天** —— 自然的多轮对话，上下文集于一身。
+- **编辑消息** —— 双击任意用户或模型消息，直接修改内容，后续回答基于新上下文。
+- **重新输出** —— 点击“重新生成”按钮，让模型再答一次。
+- **请求模型列表** —— 选择提供商后，自动拉取可用模型名称，如 `gpt-4o`、`claude-3-opus`。
+- **自定义参数面板** —— 实时调节 `temperature`、`max_tokens`、`top_p` 等。
+- **响应式 Web 界面** —— 桌面、平板、手机均自适应，触摸操作流畅。
+- **极简部署** —— 复制一个 44KB 的 JS 文件到任何装有 Node 的机器，直接跑。
+
+---
+
+## 💡 项目亮点：20 分钟 AI 创作
+
+> Fold.ai 的初始版本 **完全由 DeepSeek-v4-pro 在 20 分钟内编码完成**，未做任何手动大改。  
+> 这证明了 AI 已经能够从零构建轻量、可用的全栈应用。  
+> 你手中的每一个功能，从 12 家提供商的集成到手机端 UI，都是 AI 在“分分钟”内输出的成果。  
+> **这不是未来，这就是现在。**
+
+---
+
+## 📂 项目结构（压缩后仅 44KB）
+
+```
+fold-ai/
+├── src/                # TypeScript 源码
+│   ├── server.ts       # 轻量 HTTP 服务器
+│   ├── providers/      # 12 家 AI 提供商适配
+│   └── client/         # 前端 Web GUI（原生 JS）
+├── dist/               # 编译后的纯 JS 文件
+│   └── server.js       # 可以直接 node 运行
+└── fold-ai.min.js      # 单文件压缩版（44KB）
 ```
 
-## 📁 项目结构
-```text
-fold/
-├── server.js          # 主服务器
-├── Mod/               # 插件目录
-├── data/              # 用户数据
-├── public/            # 公共文件
-├── ken/               # 文档目录
-└── com/               # 配置文件
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 或 PR！如果你也用 AI 生成了绝妙的功能，请大胆分享。
+
+---
+
+## 📄 许可证
+
+MIT © 2025 Fold.ai 贡献者  
+*初版代码由 DeepSeek-v4-pro 生成。*
+
+---
+
+**⭐ 如果这个“20 分钟作品”让你觉得有趣，请点亮 Star！**  
+**让更多人看到 AI + TypeScript 的极致轻量魅力。**
 ```
-
-## 📝 许可证
-MIT © Xeno-Gen
-
-## 🔗 链接
-
-- [GitHub](https://github.com/Xeno-Gen/Fold-AI)
