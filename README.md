@@ -15,10 +15,10 @@
 [English README](https://github.com/Xeno-Gen/Fold.AI/edit/main/README-en.md)
 [简体中文 README](https://github.com/Xeno-Gen/Fold.AI)
 
-### 已实装的插件类型
-1.记忆（v0.2.0完整实装）
+## 已实装的插件类型
+### 1.记忆（v0.2.0完整实装）
 模型可以自主选择写入的记忆，记忆会在全部对话中生效，前提是你打开了记忆的工具链，而不是禁用。
-2.命令执行（v0.2.0完整实装）
+### 2.命令执行（v0.2.0完整实装）
 模型可以自主执行Cmd命令、PowerShell命令，在Linux平台上也兼容。
 
 
