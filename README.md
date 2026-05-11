@@ -21,9 +21,9 @@
 模型可以自主执行Cmd命令、PowerShell命令，在Linux平台上也兼容。<br>
 **3.Agent（v0.2.1实装）** <br>
 模型自主选择追加输出，如得到信息后追加调用。<br>
-**4.压缩旧执行（v0.2.2实装）** <br>
+**4.压缩旧执行（v0.3.0实装）** <br>
 将历史对话的旧执行返回压缩。<br>
-**5.文件操作（v0.2.2实装）** <br>
+**5.文件操作（v0.3.0实装）** <br>
 更精细的文件操作。
 
 ## 安装
@@ -40,6 +40,9 @@ Node bin/server.js
 #3.Linux / MacOs使用.sh脚本进行依赖安装和启动
 双击.sh
 ```
+## 彩蛋
+使用该AI框架的模型写的仿仓库HTML：[fold-ai-landing.html](https://github.com/user-attachments/files/27602848/fold-ai-landing.html)
+
 
 ## 🤝 贡献
 
