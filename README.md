@@ -40,8 +40,6 @@ Node bin/server.js
 #3.Linux / MacOs使用.sh脚本进行依赖安装和启动
 双击.sh
 ```
-## 彩蛋
-使用该AI框架的模型写的仿仓库HTML：[fold-ai-landing.html](https://github.com/user-attachments/files/27602848/fold-ai-landing.html)
 
 
 ## 🤝 贡献
