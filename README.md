@@ -4,6 +4,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-v20--v25.9.0-brightgreen?logo=node.js)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](#license)
+[![npx](https://img.shields.io/badge/npx-11.12.1-blue?logo=npm)](https://www.npmjs.com/package/npx)
 
 ## 轻量级 便携 跨平台的 AI Web GUI客户端
 ## 兼顾了扮演 记忆 独立编码，无提示词污染
