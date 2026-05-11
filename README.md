@@ -7,6 +7,7 @@
 
 # 一个轻量级、便携、跨平台的 AI Web GUI客户端
 ## 兼顾了扮演、记忆、独立编码，无提示词污染
+### 提供最纯净、原生的模型性能
 
 ## 不同语言的Md
 [English README](https://github.com/Xeno-Gen/Fold.AI/edit/main/README-en.md)
