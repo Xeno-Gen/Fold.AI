@@ -1,0 +1,7 @@
+{
+  "id": "CommandExecution",
+  "name": "命令执行",
+  "version": "1.0.0",
+  "description": "允许AI模型执行PowerShell和CMD命令，在执行前会向用户确认",
+  "author": "Fold.AI"
+}

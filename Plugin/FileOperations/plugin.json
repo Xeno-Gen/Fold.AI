@@ -1,0 +1,7 @@
+{
+  "id": "FileOperations",
+  "name": "文件操作",
+  "version": "1.0.0",
+  "description": "允许AI模型进行文件写入、修改操作，默认UTF-8编码，支持变更历史与回滚",
+  "author": "Fold.AI"
+}

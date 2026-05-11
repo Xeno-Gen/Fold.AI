@@ -1,0 +1,7 @@
+{
+  "id": "Memory",
+  "name": "记忆",
+  "version": "1.0.0",
+  "description": "允许AI保存、读取和删除文本记忆",
+  "author": "Fold.AI"
+}
