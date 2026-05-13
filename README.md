@@ -30,7 +30,7 @@
 ```
 #1.手动构建源项目依赖
 git clone https://github.com/Xeno-Gen/Fold.AI.git
-cd fold
+cd Fold.AI
 npm install
 npm run dev
 
