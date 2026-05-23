@@ -133,7 +133,7 @@
         if (currentParams.systemPrompt) sysPromptText += '\n' + currentParams.systemPrompt;
         var sysTokens = estimateTokens(sysPromptText);
         // Tool prompt (~300 chars avg when enabled)
-        var toolTokens = (commandExecEnabled || memoryEnabled || fileOpsEnabled || agentEnabled) ? 80 : 0;
+        var toolTokens = (commandExecEnabled || memoryEnabled || agentEnabled) ? 80 : 0;
         var totalTokens = msgTokens + sysTokens + toolTokens;
         var maxTokens = 1000000;
         var pct = Math.min(totalTokens / maxTokens * 100, 100);

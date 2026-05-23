@@ -24,7 +24,7 @@ export interface UserConfig {
     defaultParams: {
         temperature: number;
         top_p: number;
-        max_tokens: number;
+        max_tokens: number | null;
         seed: number | null;
         frequency_penalty: number;
         presence_penalty: number;
@@ -51,7 +51,7 @@ function ensureUserDir(userToken: string) {
             defaultParams: {
                 temperature: 0.6,
                 top_p: 1.0,
-                max_tokens: 6000,
+                max_tokens: null,
                 seed: null,
                 frequency_penalty: 0,
                 presence_penalty: 0,

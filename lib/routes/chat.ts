@@ -41,7 +41,7 @@ function toAnthropicMessages(messages: any[]) {
     for (const msg of messages) {
         if (msg.role === 'system') {
             systemMessages.push(msg.content);
-        } else if (msg.role === 'user' || msg.role === 'assistant') {
+        } else if (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool') {
             let content: any;
             if (msg.images && msg.images.length > 0) {
                 const parts: any[] = [];
@@ -138,7 +138,7 @@ function processAnthropicStreamLine(line: string, fullContent: { current: string
 
             if (type === 'content_block_delta') {
                 const delta = data.delta;
-                if (delta?.type === 'text' && delta.text) {
+                if (delta?.type === 'text_delta' && delta.text) {
                     fullContent.current += delta.text;
                     return 'data: ' + JSON.stringify({ choices: [{ delta: { content: delta.text } }] }) + '\n\n';
                 }
@@ -229,8 +229,22 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
         const finalMessages: any[] = rawMessages.map((m: any) => ({
             role: m.role,
             content: m.content || '',
-            images: m.images || []
+            images: m.images || [],
+            ...(m.role === 'assistant' ? { reasoning_content: m.reasoning || '' } : {})
         }));
+        // DeepSeek 要求 tool 消息必须有 tool_call_id 且前置 assistant 消息
+        // 必须有 tool_calls，但只要有 tool_calls 模型就会学歪输出
+        // <tool_calls><invoke name="plugin_tool">。
+        // 方案：发给 API 时 tool → user，本地存储仍用 tool role。
+        for (let i = 0; i < finalMessages.length; i++) {
+            if (finalMessages[i].role === 'tool') {
+                finalMessages[i].role = 'user';
+                delete finalMessages[i].tool_call_id;
+            }
+            if (finalMessages[i].role === 'assistant') {
+                delete finalMessages[i].tool_calls;
+            }
+        }
 
         if (!isAnthropicFormat) {
             // OpenAI 格式：system prompt 合并到消息中
@@ -305,6 +319,8 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                     activeControllers.delete(requestId!);
                 }, { once: true });
             }
+
+            logger.info('[chat] request body: ' + JSON.stringify(openaiBody));
 
             const upstreamResponse = await fetch(requestUrl, {
                 method: 'POST',
@@ -402,6 +418,7 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                     ? `in=${usage.prompt_tokens || '?'} out=${usage.completion_tokens || '?'} total=${usage.total_tokens || '?'}`
                     : 'tokens=?';
                 logger.info(`[chat] done model=${usedModel} ${tokStr} dur=${dur}ms`);
+                logger.info('[chat] response body: ' + JSON.stringify(data));
                 if (requestId) activeControllers.delete(requestId);
                 res.json({ content, usage, requestBody: openaiBody });
             }
@@ -453,6 +470,8 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                     activeControllers.delete(requestId!);
                 }, { once: true });
             }
+
+            logger.info('[chat] request body: ' + JSON.stringify(anthropicBody));
 
             const upstreamResponse = await fetch(requestUrl, {
                 method: 'POST',
@@ -574,6 +593,7 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                     ? `in=${usage.input_tokens || '?'} out=${usage.output_tokens || '?'} total=${usage.total_tokens || '?'}`
                     : 'tokens=?';
                 logger.info(`[chat] done model=${antModel} ${tokStr} dur=${dur}ms`);
+                logger.info('[chat] response body: ' + JSON.stringify(data));
                 if (requestId) activeControllers.delete(requestId);
                 res.json({ content, usage, requestBody: anthropicBody });
             }

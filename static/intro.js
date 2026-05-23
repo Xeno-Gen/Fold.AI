@@ -49,9 +49,9 @@ window.showToast = function(msg) {
     var filesBreadcrumb = $('filesBreadcrumb'), filesRefreshBtn = $('filesRefreshBtn');
     var filesCurrentDir = '/';
 
-    var isChatActive = false, deepThinkEnabled = false, currentThinkMode = 'fast';
+    var isChatActive = false, deepThinkEnabled = false, currentThinkMode = 'fast', cothinkEnabled = true;
     var cachedThinkPrompt = '';
-    var commandExecEnabled = false, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, fileOpsEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system';
+    var commandExecEnabled = false, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true;
     var cachedMemories = [];
     var chats = [[]], chatTitles = [_('currentChatTitle')], chatTokens = [''], currentChat = 0;
     var activeFiles = { initial: [], chat: [] };
@@ -62,6 +62,7 @@ window.showToast = function(msg) {
     var pureMode = false;
     var autoCollapseThink = true;
     var chatFontSize = 15;
+    var lastScrollTop = 0;
     var baseSystemPrompt = '';
     var baseSystemTokenCount = 0;
     var defaultWorkDir = '';
@@ -91,6 +92,20 @@ window.showToast = function(msg) {
         }
     }
 
+    function updateThemeToggleIcon() {
+        var btn = document.getElementById('themeToggleBtn');
+        if (!btn) return;
+        var icon = btn.querySelector('svg');
+        if (!icon) return;
+        if (currentTheme === 'light') {
+            icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+        } else if (currentTheme === 'dark') {
+            icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+        } else {
+            icon.innerHTML = '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>';
+        }
+    }
+
     function loadSettings() {
         try {
             const s = JSON.parse(localStorage.getItem('fold_ai_settings'));
@@ -98,7 +113,6 @@ window.showToast = function(msg) {
                 currentTheme = s.theme || 'system';
                 commandConfirmEnabled = s.commandConfirm !== undefined ? s.commandConfirm : true;
                 commandExecEnabled = s.commandExecEnabled || false;
-                fileOpsEnabled = s.fileOpsEnabled !== false;
                 memoryEnabled = s.memoryEnabled !== false;
                 agentEnabled = s.agentEnabled || false;
                 agentMaxIterations = s.agentMaxIterations || 10;
@@ -107,16 +121,19 @@ window.showToast = function(msg) {
                 currentThinkMode = s.thinkMode === 'direct' ? 'fast' : (s.thinkMode || 'fast');
                 deepThinkEnabled = s.deepThink || false;
                 if (s.autoCollapseThink !== undefined) autoCollapseThink = s.autoCollapseThink;
+                if (s.streamEnabled !== undefined) streamEnabled = s.streamEnabled;
+                if (s.cothinkEnabled !== undefined) cothinkEnabled = s.cothinkEnabled;
             }
         } catch (e) {}
         applyTheme(currentTheme);
+        updateThemeToggleIcon();
         try { var sf = localStorage.getItem('fold_chat_font'); if (sf) document.documentElement.style.setProperty('--chat-font', sf); } catch (e) {}
         try { var fs = localStorage.getItem('fold_chat_fontsize'); if (fs) { chatFontSize = parseInt(fs) || 15; document.documentElement.style.setProperty('--chat-font-size', chatFontSize + 'px'); } } catch (e) {}
     }
 
     function saveSettingsToLocal() {
         try {
-            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, fileOpsEnabled: fileOpsEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput }));
+            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled }));
         } catch (e) {}
     }
 
@@ -239,8 +256,7 @@ window.showToast = function(msg) {
             var sizeStr = isDir ? '' : formatFileSize(item.size);
             var actionBtns = '';
             if (!isDir) {
-                actionBtns = '<button class="file-action-btn file-preview-btn" data-path="' + escapeHtml(filePath) + '" title="预览"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
-                    '<button class="file-action-btn file-delete-btn" data-name="' + escapeHtml(item.name) + '" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>';
+                actionBtns = '<button class="file-action-btn file-preview-btn" data-path="' + escapeHtml(filePath) + '" title="预览"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>';
             }
             listHtml += '<div class="file-list-item" data-path="' + escapeHtml(filePath) + '" data-is-dir="' + isDir + '">' +
                 iconHtml +
@@ -268,25 +284,6 @@ window.showToast = function(msg) {
                 window.open('/cwd' + this.dataset.path, '_blank');
             };
         });
-        // Delete button handlers
-        filesPanelBody.querySelectorAll('.file-delete-btn').forEach(function(btn) {
-            btn.onclick = async function(e) {
-                e.stopPropagation();
-                if (!confirm('确定删除文件 "' + this.dataset.name + '" 吗？')) return;
-                try {
-                    var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || '';
-                    var res = await window.FileOperationsPlugin.deleteFile(this.dataset.name, workDir);
-                    if (res.success) {
-                        showToast('文件已删除');
-                        loadDirectory(filesCurrentDir);
-                    } else {
-                        showToast('删除失败: ' + (res.error || '未知错误'));
-                    }
-                } catch (err) {
-                    showToast('删除失败: ' + err.message);
-                }
-            };
-        });
     }
     function formatFileSize(bytes) {
         if (bytes < 1024) return bytes + ' B';
@@ -311,110 +308,7 @@ window.showToast = function(msg) {
     }
     if (filesPanelClose) filesPanelClose.onclick = closeFileBrowser;
     if (filesRefreshBtn) filesRefreshBtn.onclick = function() { loadDirectory(filesCurrentDir); };
-    // Upload button
-    var filesUploadBtn = document.getElementById('filesUploadBtn');
-    var filesUploadInput = document.createElement('input');
-    filesUploadInput.type = 'file';
-    filesUploadInput.style.display = 'none';
-    filesUploadInput.onchange = async function() {
-        var file = this.files[0];
-        if (!file) return;
-        try {
-            var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || '';
-            var res = await window.FileOperationsPlugin.uploadFile(file, workDir);
-            if (res.success) {
-                showToast('上传成功: ' + res.fileName);
-                loadDirectory(filesCurrentDir);
-            } else {
-                showToast('上传失败: ' + (res.error || '未知错误'));
-            }
-        } catch (err) {
-            showToast('上传失败: ' + err.message);
-        }
-        this.value = '';
-    };
-    document.body.appendChild(filesUploadInput);
-    if (filesUploadBtn) filesUploadBtn.onclick = function() { filesUploadInput.click(); };
 
-    // ── Backup browser ──
-    var backupOverlay = document.getElementById('backupOverlay');
-    var backupBody = document.getElementById('backupBody');
-    var backupClose = document.getElementById('backupClose');
-    var filesBackupsBtn = document.getElementById('filesBackupsBtn');
-
-    function openBackupBrowser() {
-        if (!backupOverlay) return;
-        backupOverlay.classList.add('active');
-        loadBackups();
-    }
-    function closeBackupBrowser() {
-        if (backupOverlay) backupOverlay.classList.remove('active');
-    }
-    if (backupClose) backupClose.onclick = closeBackupBrowser;
-    if (backupOverlay) backupOverlay.onclick = function(e) {
-        if (e.target === backupOverlay) closeBackupBrowser();
-    };
-
-    function getBackupWorkDir() {
-        return (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
-    }
-
-    async function loadBackups() {
-        if (!backupBody) return;
-        backupBody.innerHTML = '<div style="text-align:center;color:#999;font-size:13px;padding:30px 0;">加载中...</div>';
-        try {
-            if (!window.FileOperationsPlugin) {
-                backupBody.innerHTML = '<div style="text-align:center;color:#999;font-size:13px;padding:30px 0;">文件操作插件未加载</div>';
-                return;
-            }
-            var workDir = getBackupWorkDir();
-            var res = await window.FileOperationsPlugin.listBackups(workDir);
-            if (!res.backups || res.backups.length === 0) {
-                backupBody.innerHTML = '<div style="text-align:center;color:#999;font-size:13px;padding:30px 0;">暂无备份</div>';
-                return;
-            }
-            var html = '<div style="font-size:12px;color:#999;margin-bottom:12px;">共 ' + res.backups.length + ' 个备份文件 (.bak)</div>';
-            res.backups.forEach(function(b) {
-                var date = new Date(b.time);
-                var dateStr = date.toLocaleString();
-                var sizeStr = b.size > 1024 ? (b.size / 1024).toFixed(1) + ' KB' : b.size + ' B';
-                html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;margin-bottom:3px;font-size:12px;background:var(--hover-bg,#f5f5f5);">';
-                html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text,#1a1a1a);">' + escapeHtml(b.file) + '</span>';
-                html += '<span style="color:var(--text-secondary,#888);font-size:11px;flex-shrink:0;">' + dateStr + '</span>';
-                html += '<span style="color:#bbb;font-size:11px;flex-shrink:0;margin-left:4px;">' + sizeStr + '</span>';
-                html += '<button class="backup-restore-btn" data-file="' + escapeHtml(b.file) + '" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border,#ddd);background:transparent;cursor:pointer;font-size:11px;font-family:inherit;color:var(--text,#555);transition:all .2s;flex-shrink:0;">恢复</button>';
-                html += '</div>';
-            });
-            backupBody.innerHTML = html;
-            backupBody.querySelectorAll('.backup-restore-btn').forEach(function(btn) {
-                btn.onclick = async function() {
-                    if (!confirm('确认恢复 ' + this.dataset.file + ' 的备份？当前文件将被覆盖。')) return;
-                    var file = this.dataset.file;
-                    this.textContent = '恢复中...';
-                    this.disabled = true;
-                    try {
-                        var wd = getBackupWorkDir();
-                        var res = await window.FileOperationsPlugin.restoreBackup(file, wd);
-                        if (res.success) {
-                            showToast('已恢复: ' + res.file);
-                            loadBackups();
-                        } else {
-                            showToast('恢复失败: ' + (res.error || '未知错误'));
-                            this.textContent = '恢复';
-                            this.disabled = false;
-                        }
-                    } catch (e) {
-                        showToast('恢复失败: ' + e.message);
-                        this.textContent = '恢复';
-                        this.disabled = false;
-                    }
-                };
-            });
-        } catch (e) {
-            backupBody.innerHTML = '<div style="text-align:center;color:#d33;font-size:13px;padding:30px 0;">加载失败: ' + escapeHtml(e.message) + '</div>';
-        }
-    }
-    if (filesBackupsBtn) filesBackupsBtn.onclick = openBackupBrowser;
     // Working directory input in file browser
     var filesWorkDirInput = document.getElementById('filesWorkDirInput');
     var filesWorkDirReset = document.getElementById('filesWorkDirReset');
@@ -521,7 +415,11 @@ window.showToast = function(msg) {
             '<button class="think-mode-option' + (chatFontSize === 19 ? ' active' : '') + '" data-size="19">19</button></div></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + _('thinkAfterAutoCollapse') + '</span><div class="think-mode-selector" id="settingsAutoCollapseToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (autoCollapseThink ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!autoCollapseThink ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
+            '<button class="think-mode-option' + (!autoCollapseThink ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>' +
+            '<div class="settings-section"><div class="settings-section-title">' + (_('model') || '模型') + '</div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' + '流式输出' + '</span><div class="think-mode-selector" id="settingsStreamToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (streamEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (!streamEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
         // 字体
         var fontSelect = document.getElementById('settingsFontSelect');
         if (fontSelect) {
@@ -556,6 +454,13 @@ window.showToast = function(msg) {
                 autoCollapseThink = o.dataset.value === 'true';
                 saveSettingsToLocal();
                 settingsPanelContent.querySelectorAll('#settingsAutoCollapseToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+        settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                streamEnabled = o.dataset.value === 'true';
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
     }
@@ -748,7 +653,8 @@ window.showToast = function(msg) {
         });
         settingsPanelContent.innerHTML = '<div class="settings-section"><div class="settings-section-title">' + _('version') + '</div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="settings-version-text">' + escapeHtml(verText) + '</span></span></div>' +
-            '<div class="settings-item" style="cursor:pointer;" onclick="window.open(\'https://github.com/Xeno-Gen/Fold.AI\')"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></div>';
+            '<div class="settings-item" style="cursor:pointer;" onclick="window.open(\'https://github.com/Xeno-Gen/Fold.AI\')"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>' +
+            '<div class="settings-item" style="cursor:pointer;" onclick="window.open(\'https://space.bilibili.com/1586932627\')"><span class="settings-item-label"><img src="/img/bilibili.png" width="18" height="18" style="border-radius:50%">Bilibili</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></div>';
     }
 
     if (sidebarSettingsBtn) sidebarSettingsBtn.onclick = openSettings;
@@ -759,7 +665,7 @@ window.showToast = function(msg) {
     document.addEventListener('click', function(e) {
         if (!settingsModalOverlay.classList.contains('active')) return;
         const t = e.target.closest('#themeSelector .think-mode-option');
-        if (t) { currentTheme = t.dataset.theme; applyTheme(currentTheme); saveSettingsToLocal(); renderSettingsModal(); return; }
+        if (t) { currentTheme = t.dataset.theme; applyTheme(currentTheme); updateThemeToggleIcon(); saveSettingsToLocal(); renderSettingsModal(); return; }
         const c = e.target.closest('#commandConfirmToggle .think-mode-option');
         if (c) { commandConfirmEnabled = c.dataset.value === 'true'; renderSettingsModal(); saveSettingsToLocal(); if (window.CommandExecutionPlugin) window.CommandExecutionPlugin.setConfirmBeforeExecution(commandConfirmEnabled); }
         const a = e.target.closest('#autoCollapseToggle .think-mode-option');
@@ -767,6 +673,18 @@ window.showToast = function(msg) {
     });
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (currentTheme === 'system') applyTheme('system'); });
+
+    var themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (themeToggleBtn) {
+        themeToggleBtn.onclick = function() {
+            var order = ['light', 'dark', 'system'];
+            var idx = order.indexOf(currentTheme);
+            currentTheme = order[(idx + 1) % order.length];
+            applyTheme(currentTheme);
+            updateThemeToggleIcon();
+            saveSettingsToLocal();
+        };
+    }
 
     async function uploadFile(file) {
         const fd = new FormData();
@@ -787,6 +705,16 @@ window.showToast = function(msg) {
         fileList.forEach((file, idx) => {
             const wrap = document.createElement('div');
             if (file.type === 'image') {
+            } else if (file.type === 'video') {
+                wrap.className = 'file-preview-item';
+                wrap.innerHTML =
+                    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">' +
+                        '<polygon points="23 7 16 12 23 17 23 7"/>' +
+                        '<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>' +
+                    '</svg>' +
+                    '<span class="file-name">' + escapeHtml(file.fileName) + '</span>';
+                wrap.style.cursor = 'pointer';
+                wrap.onclick = function(e) { if (!e.target.classList.contains('remove-preview')) openFileViewer(file.fileName, file.content); };
                 wrap.className = 'image-preview-item';
                 wrap.style.backgroundImage = 'url(' + file.content + ')';
             } else {
@@ -957,6 +885,20 @@ window.showToast = function(msg) {
                         switchChat(idx);
                         return;
                     }
+                    // Token not in chat list, try loading directly by token
+                    try {
+                        var byToken = await (await fetch('/api/chat/by-token/' + encodeURIComponent(targetToken))).json();
+                        if (byToken && byToken.messages) {
+                            remote.push({ title: byToken.title, token: byToken.token });
+                            chats.push(byToken.messages || []);
+                            chatTitles.push(byToken.title || _('currentChatTitle'));
+                            chatTokens.push(byToken.token);
+                            var newIdx = chats.length - 1;
+                            if (!isChatActive) activateChat(false);
+                            switchChat(newIdx);
+                            return;
+                        }
+                    } catch (e2) {}
                 }
             }
         } catch (e) {}
@@ -1267,6 +1209,34 @@ window.showToast = function(msg) {
                 '</div>';
         } else if (role === 'system') {
             contentHtml = '<div class="markdown-body system-message">' + renderMarkdown(content) + '</div>';
+        } else if (msgRef && (msgRef._fileCard || msgRef._fileName)) {
+            // 文件/图片/视频卡片展示
+            var fname = msgRef._fileName || '';
+            var fcontent = content;
+            if (!fname) {
+                var m = content.match(/^\[文件: (.+?)\]/);
+                if (m) { fname = m[1]; fcontent = content.replace(/^\[文件: .+?\]\n?/, ''); }
+            }
+            if (fname) {
+                var ext = fname.split('.').pop().toLowerCase();
+                var isImg = !!(msgRef._imageCard || ext.match(/^(png|jpg|jpeg|gif|webp|svg)$/));
+                var isVid = !!(ext.match(/^(mp4|mov|webm|avi|mkv|flv|wmv)$/));
+                if (isVid) {
+                    contentHtml = '<div style="max-width:100%;margin:4px 0;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;">' +
+                        '<video controls preload="metadata" style="width:100%;display:block;max-height:400px;background:#000;" src="' + (fcontent || '') + '">' +
+                        '</video></div>';
+                } else if (isImg) {
+                    contentHtml = '<div style="display:inline-block;max-width:100%;margin:4px 0;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;cursor:pointer;" onclick="openFileViewer(\'' + escapeHtml(fname) + '\',\'' + (fcontent || '') + '\')">' +
+                        '<img src="' + (fcontent || '') + '" alt="' + escapeHtml(fname) + '" style="max-width:100%;max-height:300px;display:block;">' +
+                        '</div>';
+                } else {
+                    contentHtml = '<div style="display:inline-flex;align-items:center;gap:12px;padding:14px 18px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;min-width:180px;cursor:pointer;flex-shrink:0;margin:4px 0;" onclick="openFileViewer(\'' + escapeHtml(fname) + '\',\'' + escapeHtml(fcontent || '') + '\')">' +
+                        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+                        '<span style="font-size:13px;color:#333;line-height:1.3;word-break:break-all;">' + escapeHtml(fname) + '</span></div>';
+                }
+            } else {
+                contentHtml = '<div class="markdown-body">' + renderMarkdown(content) + '</div>';
+            }
         } else {
             contentHtml = '<div class="markdown-body">' + renderMarkdown(content) + '</div>';
         }
@@ -1616,6 +1586,18 @@ window.showToast = function(msg) {
                 '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
+        // Replace shell blocks
+        result = result.replace(/<shell>\s*([\s\S]*?)\s*<\/shell>/gi, function(match, cmd) {
+            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+            pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
+            return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
+                '<div class="plugin-block-header">' +
+                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
+                '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
+                '</div>');
+        });
         // Replace mem:key blocks
         result = result.replace(/<mem:([^>]+)>([\s\S]*?)<\/mem:\1>/gi, function(match, key, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -1628,42 +1610,12 @@ window.showToast = function(msg) {
                 '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
                 '</div>');
         });
-        // FileOperations: add tag
-        result = result.replace(/<\s*add\s*>([\s\S]*?)\s*<\s*\/\s*add\s*>/gi, function(match, body) {
-            var nlIdx = body.indexOf('\n');
-            var fname = nlIdx !== -1 ? body.substring(0, nlIdx).trim() : body.trim();
-            var content = nlIdx !== -1 ? body.substring(nlIdx + 1).trim() : '';
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'file' };
-            return _pluginMark('<div class="plugin-block file-block collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">文件写入: ' + escapeHtml(fname) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content || '(空内容)') + '</div>' +
-                '</div>');
-        });
-        // FileOperations: mod tag
-        result = result.replace(/<\s*mod\s*>([\s\S]*?)\s*<\s*\/\s*mod\s*>/gi, function(match, body) {
-            var nlIdx = body.indexOf('\n');
-            var fname = nlIdx !== -1 ? body.substring(0, nlIdx).trim() : body.trim();
-            var rest = nlIdx !== -1 ? body.substring(nlIdx + 1).trim() : '';
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'file' };
-            return _pluginMark('<div class="plugin-block file-block collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">文件修改: ' + escapeHtml(fname) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(rest || fname) + '</div>' +
-                '</div>');
-        });
         // 处理未闭合的开标签（流式输出中），检测到开标签立即折叠
         // power/powershell 未闭合
         result = result.replace(/<(?:power|powershell)>\s*([\s\S]*)$/gi, function(match, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            return _pluginMark('<div class="plugin-block cmd-block collapsed streaming" id="' + bid + '">' +
+            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">正在执行命令</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
@@ -1675,7 +1627,7 @@ window.showToast = function(msg) {
         result = result.replace(/<(?:cmd|command)>\s*([\s\S]*)$/gi, function(match, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            return _pluginMark('<div class="plugin-block cmd-block collapsed streaming" id="' + bid + '">' +
+            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">正在执行命令</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
@@ -1683,29 +1635,13 @@ window.showToast = function(msg) {
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
                 '</div>');
         });
-        // add 未闭合
-        result = result.replace(/<\s*add\s*>([\s\S]*)$/gi, function(match, content) {
-            var nlIdx = content.indexOf('\n');
-            var fname = nlIdx !== -1 ? content.substring(0, nlIdx).trim() : content.trim();
+        // shell 未闭合
+        result = result.replace(/<shell>\s*([\s\S]*)$/gi, function(match, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'file' };
-            return _pluginMark('<div class="plugin-block file-block collapsed streaming" id="' + bid + '">' +
+            pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
+            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">文件写入: ' + escapeHtml(fname) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
-                '</div>');
-        });
-        // mod 未闭合
-        result = result.replace(/<\s*mod\s*>([\s\S]*)$/gi, function(match, content) {
-            var nlIdx = content.indexOf('\n');
-            var fname = nlIdx !== -1 ? content.substring(0, nlIdx).trim() : content.trim();
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'file' };
-            return _pluginMark('<div class="plugin-block file-block collapsed streaming" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">文件修改: ' + escapeHtml(fname) + '</span>' +
+                '<span class="plugin-block-title">正在执行命令</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
@@ -1715,7 +1651,7 @@ window.showToast = function(msg) {
         result = result.replace(/<mem:([^>]+)>([\s\S]*)$/gi, function(match, key, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem' };
-            return _pluginMark('<div class="plugin-block mem-block collapsed streaming" id="' + bid + '">' +
+            return _pluginMark('<div class="plugin-block mem-block streaming" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
@@ -1793,7 +1729,7 @@ window.showToast = function(msg) {
             var bubbles = [];
             chats[idx].forEach(function(m) {
                 if (!m.role) return;
-                var r = m.role === 'system' ? 'system' : (m.role === 'user' ? 'user' : 'ai');
+                var r = m.role === 'system' || m.role === 'tool' ? 'system' : (m.role === 'user' ? 'user' : 'ai');
                 var b = addMessage(m.content, r, m.images || [], m.reasoning, m);
                 bubbles.push({ bubble: b, role: r, msg: m });
             });
@@ -1859,7 +1795,7 @@ window.showToast = function(msg) {
                     toggleHeader.className = 'agent-iter-toggle';
                     toggleHeader.style.cssText = 'font-size:12px;color:#9b968b;cursor:pointer;padding:4px 0;user-select:none;display:flex;align-items:center;gap:6px;';
                     toggleHeader.innerHTML = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M5.5 2.15L5.92 2.58L8.65 5.3C8.91 5.56 9.13 5.78 9.3 5.99C9.47 6.2 9.62 6.44 9.67 6.75C9.69 6.92 9.69 7.08 9.67 7.25C9.62 7.56 9.47 7.8 9.3 8.01C9.13 8.22 8.91 8.44 8.65 8.7L5.92 11.42L5.5 11.85L4.65 11L5.08 10.58L7.8 7.85C8.08 7.57 8.25 7.4 8.36 7.26C8.47 7.13 8.48 7.08 8.48 7.06C8.49 7.02 8.49 6.98 8.48 6.94C8.48 6.92 8.47 6.87 8.36 6.74C8.25 6.6 8.08 6.43 7.8 6.15L5.08 3.42L4.65 3L5.5 2.15Z" fill="currentColor"/></svg>';
-                    toggleHeader.appendChild(document.createTextNode('Agent ' + iterNum + '/' + groupSize));
+                    // toggle text removed
                     bub.insertBefore(toggleHeader, contentWrap);
                     // Default to expanded (visible) state
                     bub.dataset.agentCollapsed = '0';
@@ -2021,7 +1957,15 @@ window.showToast = function(msg) {
     var slashGhostEls = {};
 
 
-    chatArea.addEventListener('scroll', function() { isUserScrolledAway = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight > 40; });
+    chatArea.addEventListener('scroll', function() {
+        var atBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 40;
+        if (atBottom) {
+            isUserScrolledAway = false;
+        } else if (chatArea.scrollTop < lastScrollTop) {
+            isUserScrolledAway = true;
+        }
+        lastScrollTop = chatArea.scrollTop;
+    });
     var userExpandedBodies = {};
     chatArea.addEventListener('click', function(e) {
         var collapsed = e.target.closest('.msg-collapsed');
@@ -2083,7 +2027,7 @@ window.showToast = function(msg) {
             var popup = document.createElement('div');
             popup.className = 'deep-think-popup';
             popup._triggerBtn = triggerBtn;
-            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span>' + _('fileOps') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (fileOpsEnabled ? ' active' : '') + '" data-tool="fileops" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!fileOpsEnabled ? ' active' : '') + '" data-tool="fileops" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
+            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
             document.body.appendChild(popup);
             var rect = triggerBtn.getBoundingClientRect();
             popup.style.left = (rect.left + rect.width / 2 - 10) + 'px';
@@ -2117,15 +2061,14 @@ window.showToast = function(msg) {
                         if (window.CommandExecutionPlugin) window.CommandExecutionPlugin.setEnabled(commandExecEnabled);
                         saveSettingsToLocal();
                     }
-                    if (tool === 'fileops') {
-                        fileOpsEnabled = value === 'on';
-                        popup.querySelectorAll('.tool-chain-option[data-tool="fileops"]').forEach(function(o) { o.classList.toggle('active', o === op); });
-                        if (window.FileOperationsPlugin) window.FileOperationsPlugin.enabled = fileOpsEnabled;
-                        saveSettingsToLocal();
-                    }
                     if (tool === 'agent') {
                         agentEnabled = value === 'on';
                         popup.querySelectorAll('.tool-chain-option[data-tool="agent"]').forEach(function(o) { o.classList.toggle('active', o === op); });
+                        saveSettingsToLocal();
+                    }
+                    if (tool === 'cothink') {
+                        cothinkEnabled = value === 'on';
+                        popup.querySelectorAll('.tool-chain-option[data-tool="cothink"]').forEach(function(o) { o.classList.toggle('active', o === op); });
                         saveSettingsToLocal();
                     }
                     if (tool === 'compressExec') {

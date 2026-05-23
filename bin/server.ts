@@ -72,10 +72,10 @@ setSystemVersion(sysVersion);
 logger.info('System version: ' + sysVersion);
 
 const app = express();
-const PORT = parseInt(envData.POST) || 3000;
+const PORT = parseInt(envData.PORT) || parseInt(envData.POST) || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '100mb' }));
 app.use(cookieParser());
 app.use(initUserMiddleware);
 
@@ -153,7 +153,7 @@ app.get('/api/files/read', (req, res) => {
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
         const stat = fs.statSync(filePath);
         if (stat.isDirectory()) return res.status(400).json({ error: '不能读取目录' });
-        if (stat.size > 10 * 1024 * 1024) return res.status(400).json({ error: '文件过大' });
+        if (stat.size > 1000 * 1024 * 1024) return res.status(400).json({ error: '文件过大' });
         const ext = path.extname(filePath).toLowerCase();
         const textExts = ['.txt', '.md', '.json', '.js', '.ts', '.jsx', '.tsx', '.html', '.css', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.log', '.csv', '.py', '.java', '.c', '.cpp', '.h', '.rs', '.go', '.rb', '.php', '.sh', '.bat', '.ps1', '.sql', '.vue', '.svelte', '.toml', '.env', '.gitignore', '.svg'];
         const isText = textExts.includes(ext) || !ext;
@@ -178,13 +178,13 @@ app.get('/chat/:token', (req, res) => {
             const chat = chats.find((c: any) => c.token === req.params.token);
             if (chat) {
                 const chatJson = JSON.stringify(chat).replace(/</g, '\\u003c');
-                html = html.replace('<script src="/intro.js"></script>\n\t<script src="/chat.js"></script>\n\t<script src="/slash.js"></script>', '<script>window.__CHAT_DATA__=' + chatJson + ';window.__CHAT_TOKEN__="' + req.params.token + '";</script><script src="/intro.js"></script>\n\t<script src="/chat.js"></script>\n\t<script src="/slash.js"></script>');
+                html = html.replace('<script src="/intro.js"></script>\n<script src="/chat.js"></script>\n<script src="/slash.js"></script>', '<script>window.__CHAT_DATA__=' + chatJson + ';window.__CHAT_TOKEN__="' + req.params.token + '";</script>\n<script src="/intro.js"></script>\n<script src="/chat.js"></script>\n<script src="/slash.js"></script>');
                 return res.send(html);
             }
         }
     } catch (e) {}
     // 未找到对话，也标记 token 供前端读取
-    html = html.replace('<script src="/intro.js"></script>\n\t<script src="/chat.js"></script>\n\t<script src="/slash.js"></script>', '<script>window.__CHAT_DATA__=null;window.__CHAT_TOKEN__="' + req.params.token + '";</script><script src="/intro.js"></script>\n\t<script src="/chat.js"></script>\n\t<script src="/slash.js"></script>');
+    html = html.replace('<script src="/intro.js"></script>\n<script src="/chat.js"></script>\n<script src="/slash.js"></script>', '<script>window.__CHAT_DATA__=null;window.__CHAT_TOKEN__="' + req.params.token + '";</script>\n<script src="/intro.js"></script>\n<script src="/chat.js"></script>\n<script src="/slash.js"></script>');
     res.send(html);
 });
 

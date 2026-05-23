@@ -1,6 +1,7 @@
 module.exports = function(context) {
     const express = require('express');
     const { exec } = require('child_process');
+    const os = require('os');
     const router = express.Router();
 
     // ---- detect: 检测用户输入是否需要执行命令 ----
@@ -77,7 +78,7 @@ module.exports = function(context) {
             }
 
             const cmdPrompt = `用户需要执行系统命令。请根据对话内容，输出具体的命令。
-使用标签格式: <power:PowerShell命令> 或 <cmd:CMD命令>
+使用标签格式: <power:PowerShell命令> 或 <cmd:CMD命令> 或 <shell:Shell命令>
 只输出标签，不要添加其他内容。`;
 
             const genMessages = [
@@ -109,11 +110,14 @@ module.exports = function(context) {
             const content = data.choices?.[0]?.message?.content || '';
             const powerMatch = content.match(/<power:(.+?)>/i);
             const cmdMatch = content.match(/<cmd:(.+?)>/i);
+            const shellMatch = content.match(/<shell:(.+?)>/i);
 
             if (powerMatch) {
                 res.json({ shell: 'powershell', command: powerMatch[1].trim() });
             } else if (cmdMatch) {
                 res.json({ shell: 'cmd', command: cmdMatch[1].trim() });
+            } else if (shellMatch) {
+                res.json({ shell: 'shell', command: shellMatch[1].trim() });
             } else {
                 res.status(400).json({ error: '无法生成命令' });
             }
@@ -123,15 +127,59 @@ module.exports = function(context) {
     }
     router.post('/generate', generate);
 
-    // ---- execute: 执行命令（通过PowerShell或CMD） ----
+    // ---- execute: 执行命令（统一通过 PowerShell 保证 UTF-8 输出） ----
+    // 快照工作目录文件状态（用于检测命令执行后的文件变动）
+    function snapshotFiles(workDir) {
+        const fs = require('fs');
+        const path = require('path');
+        const snap = {};
+        try {
+            if (!fs.existsSync(workDir)) return snap;
+            const items = fs.readdirSync(workDir);
+            for (const name of items) {
+                const fp = path.join(workDir, name);
+                try {
+                    const stat = fs.statSync(fp);
+                    if (stat.isFile() && !name.endsWith('.bak') && !name.startsWith('_ps_tmp_') && !name.startsWith('_sh_tmp_')) {
+                        snap[name] = { mtime: stat.mtimeMs, size: stat.size };
+                    }
+                } catch(e) {}
+            }
+        } catch(e) {}
+        return snap;
+    }
+
+    // 对比快照，为变动的文件创建 .bak 备份
+    function createBaksForChanged(workDir, beforeSnap) {
+        const after = snapshotFiles(workDir);
+        for (const name in after) {
+            const a = beforeSnap[name];
+            const b = after[name];
+            if (a && b && (a.mtime !== b.mtime || a.size !== b.size)) {
+                const fp = require('path').join(workDir, name);
+                try {
+                    const fs = require('fs');
+                    const bakPath = fp + '.bak';
+                    if (!fs.existsSync(bakPath)) {
+                        fs.copyFileSync(fp, bakPath);
+                        context.logger.info('[bak] created: ' + bakPath);
+                    }
+                } catch(e) {
+                    context.logger.warn('[bak] failed for ' + name + ': ' + e.message);
+                }
+            }
+        }
+    }
+
     function execute(req, res) {
+        const startTime = Date.now();
         const { shell, command, timeout, workingDirectory } = req.body;
 
         if (!command) {
             return res.status(400).json({ error: '缺少命令内容' });
         }
 
-        if (shell !== 'powershell' && shell !== 'cmd') {
+        if (shell !== 'powershell' && shell !== 'cmd' && shell !== 'shell') {
             return res.status(400).json({ error: '不支持的Shell类型' });
         }
 
@@ -139,15 +187,12 @@ module.exports = function(context) {
         const fs = require('fs');
         const path = require('path');
         let workDir = workingDirectory || process.cwd();
-        // 'cwd' 映射到项目实际工作目录
         if (workDir === 'cwd') {
             workDir = path.join(__dirname, '../../../cwd');
         }
-        // 相对路径转为绝对路径
         if (!path.isAbsolute(workDir)) {
             workDir = path.resolve(workDir);
         }
-        // 确保工作目录存在，否则回退到进程 cwd
         if (!fs.existsSync(workDir)) {
             try { fs.mkdirSync(workDir, { recursive: true }); } catch (e) { workDir = process.cwd(); }
         }
@@ -160,6 +205,9 @@ module.exports = function(context) {
             /shutdown/i,
             /restart-computer/i,
             /stop-computer/i,
+            /sudo\s+rm\s+-rf/i,
+            />\s*\/dev\/sda/i,
+            /dd\s+if=/i,
         ];
 
         for (const pattern of dangerousPatterns) {
@@ -170,35 +218,65 @@ module.exports = function(context) {
 
         const sysRoot = process.env.SystemRoot || 'C:\\Windows';
         const psPath = sysRoot + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-        const cmdPath = sysRoot + '\\System32\\cmd.exe';
 
-        let shellCommand;
-        const psUtf8Preamble = 'chcp 65001 > $null; [Console]::InputEncoding = [System.Text.Encoding]::UTF8; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; $PSDefaultParameterValues[\'*:Encoding\'] = \'utf8\'; $PSDefaultParameterValues[\'Out-File:Encoding\'] = \'utf8\'; $PSDefaultParameterValues[\'Set-Content:Encoding\'] = \'utf8\'; $PSDefaultParameterValues[\'Add-Content:Encoding\'] = \'utf8\';';
-        if (shell === 'powershell' && command.includes('\n')) {
-            // Multi-line PowerShell: write to temp .ps1 file to avoid newline issues
-            const tmpDir = workDir;
-            const tmpFile = tmpDir + '\\_ps_tmp_' + Date.now() + '.ps1';
-            const psScript = psUtf8Preamble + '\n' + command;
-            fs.writeFileSync(tmpFile, '﻿' + psScript, 'utf-8');
-            shellCommand = `"${psPath}" -NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"`;
-            context.logger.info('[exec] powershell (script)> ' + tmpFile);
-            // Clean up temp file after execution
-            const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (e) {} };
-            const startTime = Date.now();
-            exec(shellCommand, { timeout: execTimeout, cwd: workDir, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer' }, (error, stdout, stderr) => {
-                cleanup();
+        // 统一写临时 .ps1 脚本执行，保证 UTF-8
+        const tmpFile = path.join(workDir, '_ps_tmp_' + Date.now() + '.ps1');
+
+        let psScript;
+        if (shell === 'powershell') {
+            psScript = 'chcp 65001 > $null\n' +
+                '[Console]::InputEncoding = [System.Text.Encoding]::UTF8\n' +
+                '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+                '$OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+                "$PSDefaultParameterValues['*:Encoding'] = 'utf8'\n" +
+                command;
+        } else if (shell === 'shell') {
+            // Linux shell (bash), on Windows try Git Bash or WSL
+            const isWin = os.platform() === 'win32';
+            if (isWin) {
+                const gitBash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+                if (fs.existsSync(gitBash)) {
+                    const tmpSh = path.join(workDir, '_sh_tmp_' + Date.now() + '.sh');
+                    fs.writeFileSync(tmpSh, command, 'utf-8');
+                    const shSnap1 = snapshotFiles(workDir);
+                    context.logger.info('[exec] shell> ' + command + ' (via Git Bash)');
+                    context.logger.info('[exec] shell via Git Bash: ' + command.substring(0, 100));
+                    exec('"' + gitBash + '" "' + tmpSh + '"', { timeout: execTimeout, cwd: workDir, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer' }, (error, stdout, stderr) => {
+                        try { fs.unlinkSync(tmpSh); } catch(e) {}
+                        try { createBaksForChanged(workDir, shSnap1); } catch(e) { context.logger.error('[bak] error: ' + e.message); }
+                        handleResult(error, stdout, stderr, startTime);
+                    });
+                    return;
+                }
+                // No Git Bash, fall through to error
+                return res.status(400).json({ error: 'Shell (bash) 在 Windows 上需要安装 Git Bash' });
+            }
+            // Linux: use /bin/bash directly
+            const tmpSh = path.join(workDir, '_sh_tmp_' + Date.now() + '.sh');
+            fs.writeFileSync(tmpSh, command, 'utf-8');
+            const shSnap2 = snapshotFiles(workDir);
+            context.logger.info('[exec] shell> ' + command);
+            exec('/bin/bash "' + tmpSh + '"', { timeout: execTimeout, cwd: workDir, maxBuffer: 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
+                try { fs.unlinkSync(tmpSh); } catch(e) {}
+                try { createBaksForChanged(workDir, shSnap2); } catch(e) { context.logger.error('[bak] error: ' + e.message); }
                 handleResult(error, stdout, stderr, startTime);
             });
             return;
-        } else if (shell === 'powershell') {
-            shellCommand = `"${psPath}" -NoProfile -Command "${psUtf8Preamble} ${command.replace(/"/g, '\\"')}"`;
         } else {
-            shellCommand = `"${cmdPath}" /c "chcp 65001>nul && ${command.replace(/"/g, '\\"')}"`;
+            // CMD 也走 PowerShell，输出统一 UTF-8
+            const safeCmd = command.replace(/'/g, "''");
+            psScript = 'chcp 65001 > $null\n' +
+                '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+                '$OutputEncoding = [System.Text.Encoding]::UTF8\n' +
+                "& cmd /c '" + safeCmd + "'";
         }
 
-        context.logger.info('[exec] ' + shell + '> ' + command);
-        const startTime = Date.now();
+        fs.writeFileSync(tmpFile, '﻿' + psScript, 'utf-8');
+        const shellCommand = '"' + psPath + '" -NoProfile -ExecutionPolicy Bypass -File "' + tmpFile + '"';
 
+        context.logger.info('[exec] ' + shell + '> ' + command);
+
+        const fileSnapBefore = snapshotFiles(workDir);
         exec(shellCommand, {
             timeout: execTimeout,
             cwd: workDir,
@@ -206,51 +284,39 @@ module.exports = function(context) {
             windowsHide: true,
             encoding: 'buffer',
         }, (error, stdout, stderr) => {
+            try { fs.unlinkSync(tmpFile); } catch(e) {}
+            createBaksForChanged(workDir, fileSnapBefore);
             handleResult(error, stdout, stderr, startTime);
         });
 
         function handleResult(error, stdout, stderr, startTime) {
-            const duration = Date.now() - startTime;
+            try {
+                const duration = Date.now() - startTime;
 
-            const decode = (buf) => {
-                if (!buf || buf.length === 0) return '';
-                // On Chinese Windows, PowerShell often outputs GBK despite chcp 65001.
-                // Try GBK first: if it decodes cleanly (no replacement chars), use it.
-                // GBK→UTF8 mismatch produces valid-but-wrong CJK chars that slip past
-                // simple heuristics, so we invert the priority.
-                try {
-                    const gbk = new TextDecoder('gbk').decode(buf);
-                    // If GBK produced replacement characters, the output likely isn't GBK
-                    if (!gbk.includes('�')) return gbk;
-                } catch {}
-                // Fall back to UTF-8
-                const utf8 = buf.toString('utf-8');
-                if (!utf8.includes('�')) return utf8;
-                // Both failed — return the one with fewer replacement chars
-                try {
-                    const gbk = new TextDecoder('gbk').decode(buf);
-                    const gbkBad = (gbk.match(/�/g) || []).length;
-                    const utf8Bad = (utf8.match(/�/g) || []).length;
-                    return gbkBad <= utf8Bad ? gbk : utf8;
-                } catch {}
-                return utf8;
-            };
+                const decode = (buf) => {
+                    if (!buf || buf.length === 0) return '';
+                    return new TextDecoder('utf-8', { fatal: false }).decode(buf);
+                };
 
-            const result = {
-                stdout: decode(stdout),
-                stderr: decode(stderr),
-                exitCode: error ? (error.code || 1) : 0,
-                duration,
-                shell,
-                command,
-            };
+                const result = {
+                    stdout: decode(stdout),
+                    stderr: decode(stderr),
+                    exitCode: error ? (error.code || 1) : 0,
+                    duration,
+                    shell,
+                    command,
+                };
 
-            if (error && !result.stderr) {
-                result.stderr = error.message;
+                if (error && !result.stderr) {
+                    result.stderr = error.message;
+                }
+
+                context.logger.info('[exec] shell=' + shell + ' exit=' + result.exitCode + ' dur=' + duration + 'ms');
+                res.json(result);
+            } catch (e) {
+                context.logger.error('[exec] handleResult error: ' + e.message + ' ' + e.stack);
+                if (!res.headersSent) res.status(500).json({ error: e.message });
             }
-
-            context.logger.info('[exec] exit=' + result.exitCode + ' dur=' + duration + 'ms stdout=' + (result.stdout ? result.stdout.substring(0, 100) : '(empty)'));
-            res.json(result);
         }
     }
     router.post('/execute', execute);

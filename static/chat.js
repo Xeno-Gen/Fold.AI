@@ -8,19 +8,20 @@
     function stripTags(text) {
         return text
             .replace(/<mem:[^>]+>[\s\S]*?<\/mem:[^>]+>/gi, '')
-            .replace(/<(?:power|powershell)>\s*[\s\S]*?\s*<\/(?:power|powershell)>/gi, '')
-            .replace(/<(?:cmd|command)>\s*[\s\S]*?\s*<\/(?:cmd|command)>/gi, '')
-            .replace(/<\s*(?:add|mod)\s*>[\s\S]*?\s*<\s*\/\s*(?:add|mod)\s*>/gi, '')
+            .replace(/<power>[\s\S]*?<\/power>/gi, '')
+            .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
+            .replace(/<shell>[\s\S]*?<\/shell>/gi, '')
             .replace(/<mem-del:[^>]+>/gi, '')
             .replace(/<conti:994>/gi, '')
             .trim();
     }
 
     async function processToolCalls(responseText) {
-        // Parse <power>\n...\n</power> and <cmd>\n...\n</cmd> tags
+        // Parse <power>...</power>, <cmd>...</cmd> and <shell>...</shell> tags
         var commands = [];
-        var powerRegex = /<(?:power|powershell)>\s*([\s\S]*?)\s*<\/(?:power|powershell)>/gi;
-        var cmdRegex = /<(?:cmd|command)>\s*([\s\S]*?)\s*<\/(?:cmd|command)>/gi;
+        var powerRegex = /<power>([\s\S]*?)<\/power>/gi;
+        var cmdRegex = /<cmd>([\s\S]*?)<\/cmd>/gi;
+        var shellRegex = /<shell>([\s\S]*?)<\/shell>/gi;
         var match;
         while ((match = powerRegex.exec(responseText)) !== null) {
             commands.push({ idx: commands.length, shell: 'powershell', command: match[1].trim() });
@@ -28,27 +29,30 @@
         while ((match = cmdRegex.exec(responseText)) !== null) {
             commands.push({ idx: commands.length, shell: 'cmd', command: match[1].trim() });
         }
+        while ((match = shellRegex.exec(responseText)) !== null) {
+            commands.push({ idx: commands.length, shell: 'shell', command: match[1].trim() });
+        }
         if (commands.length === 0) return;
         // Stop all streaming command timers since we're about to execute for real
         for (var bid in pluginBlockTimers) {
             if (pluginBlockTimers[bid] && pluginBlockTimers[bid].type === 'cmd') pluginBlockTimers[bid].done = true;
         }
 
-        var dangerous = [/rm\s+-rf/i, /(?:^|[&|;])\s*format\s+[a-z]:/i, /del\s+\/f/i, /rd\s+\/s/i, /shutdown/i];
+        var dangerous = [/rm\s+-rf/i, /(?:^|[&|;])\s*format\s+[a-z]:/i, /del\s+\/f/i, /rd\s+\/s/i, /shutdown/i, /sudo\s+rm\s+-rf/i, />\s*\/dev\/sda/i, /dd\s+if=/i, /:\(\)\s*\{/i];
         for (var ci = 0; ci < commands.length; ci++) {
             var cmd = commands[ci];
             if (dangerous.some(function(p) { return p.test(cmd.command); })) {
-                var msg = { role: 'system', content: _('dangerousBlocked') + cmd.command, images: [], _isExec: true };
+                var msg = { role: 'tool', content: _('dangerousBlocked') + cmd.command, images: [], _isExec: true };
                 chats[currentChat].push(msg);
-                addMessage(msg.content, 'system', [], null, msg);
+                addMessage(msg.content, 'tool', [], null, msg);
                 continue;
             }
             if (commandConfirmEnabled && window.CommandExecutionPlugin) {
                 try {
                     if (!(await window.CommandExecutionPlugin.confirmCommand(cmd.shell, cmd.command))) {
-                        var msg = { role: 'system', content: _('cmdCancelled') + cmd.shell + ' ' + cmd.command, images: [], _isExec: true };
+                        var msg = { role: 'tool', content: _('cmdCancelled') + cmd.shell + ' ' + cmd.command, images: [], _isExec: true };
                         chats[currentChat].push(msg);
-                        addMessage(msg.content, 'system', [], null, msg);
+                        addMessage(msg.content, 'tool', [], null, msg);
                         continue;
                     }
                 } catch (e) {
@@ -65,7 +69,7 @@
                     if (storedCmd === cmdNorm) { matchedBid = bid; break; }
                 }
             }
-            var execMsg = { role: 'system', content: '', images: [], _bid: matchedBid, _isExec: true };
+            var execMsg = { role: 'tool', content: '', images: [], _bid: matchedBid, _isExec: true };
             chats[currentChat].push(execMsg);
             try {
                 var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir;
@@ -78,12 +82,12 @@
                     var out = rawOut.trim();
                     resultBody = (rawOut ? (out || rawOut) : _('noOutput')) + '\n' + _('exitCode') + d.exitCode;
                     resultTitle = '命令结果: ' + cmd.shell + '> ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
-                    sysMsg = { role: 'system', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
+                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 } else {
                     var errText = await res.text();
                     resultTitle = '命令失败: ' + cmd.shell + '> ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
                     resultBody = errText;
-                    sysMsg = { role: 'system', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
+                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 }
                 var idx = chats[currentChat].indexOf(execMsg);
                 if (idx !== -1) chats[currentChat][idx] = sysMsg;
@@ -99,7 +103,7 @@
             } catch (e) {
                 var resultBody = e.message;
                 var resultTitle = '命令异常: ' + cmd.shell + '> ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
-                var sysMsg = { role: 'system', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
+                var sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 var idx = chats[currentChat].indexOf(execMsg);
                 if (idx !== -1) chats[currentChat][idx] = sysMsg;
                 var target = matchedBid ? document.getElementById(matchedBid) : null;
@@ -132,9 +136,9 @@
                     body: JSON.stringify({ content: content })
                 });
                 if (res.ok) {
-                    var msg = { role: 'system', content: _('memSaved') + key + ']', images: [], _isExec: true };
+                    var msg = { role: 'tool', content: _('memSaved') + key + ']', images: [], _isExec: true };
                     chats[currentChat].push(msg);
-                    addMessage(msg.content, 'system', [], null, msg);
+                    addMessage(msg.content, 'tool', [], null, msg);
                 }
             } catch (e) {}
         }
@@ -144,9 +148,9 @@
             try {
                 var res = await fetch('/api/plugin/Memory/memory/' + encodeURIComponent(key), { method: 'DELETE' });
                 if (res.ok) {
-                    var msg = { role: 'system', content: _('memDeleted') + key + ']', images: [], _isExec: true };
+                    var msg = { role: 'tool', content: _('memDeleted') + key + ']', images: [], _isExec: true };
                     chats[currentChat].push(msg);
-                    addMessage(msg.content, 'system', [], null, msg);
+                    addMessage(msg.content, 'tool', [], null, msg);
                 }
             } catch (e) {}
         }
@@ -157,67 +161,26 @@
         await refreshMemories();
     }
 
-    async function processFileOpsCalls(responseText) {
-        var foRegex = /<(add|mod)>([\s\S]*?)<\/\1>/gi;
-        var match;
-        var hasMatch = false;
-        while ((match = foRegex.exec(responseText)) !== null) { hasMatch = true; }
-        if (!hasMatch) return;
-        foRegex.lastIndex = 0;
-        try {
-            var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
-            var res = await fetch('/api/plugin/FileOperations/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: responseText, workingDirectory: workDir })
-            });
-            if (res.ok) {
-                var data = await res.json();
-                if (data.results && data.results.length > 0) {
-                    var lines = [];
-                    data.results.forEach(function(r) {
-                        if (r.error) {
-                            lines.push('[文件操作] ' + r.type + ' 失败: ' + r.error);
-                        } else if (r.type === 'add') {
-                            lines.push('[文件操作] ' + r.file + ' 已' + (r.action === 'updated' ? '更新' : '创建') + ' (' + r.written + ' bytes)');
-                        } else if (r.type === 'mod') {
-                            lines.push('[文件操作] ' + r.file + ' 行' + r.range + ' 已修改 (替换' + r.replaced + '行为' + r.with + '行)');
-                        }
-                    });
-                    if (lines.length > 0) {
-                        var msg = { role: 'system', content: lines.join('\n'), images: [], _isExec: true };
-                        chats[currentChat].push(msg);
-                        addMessage(msg.content, 'system', [], null, msg);
-                        saveChatToBackend();
-                    }
-                }
-            }
-        } catch (e) {}
-    }
-
     // 从 pluginPrompts 模板构建工具提示词
     function buildToolPrompt() {
         var parts = [];
         if (agentEnabled && pluginPrompts.agent) {
             parts.push(pluginPrompts.agent);
         }
-        if ((commandExecEnabled || memoryEnabled || fileOpsEnabled)) {
+        if ((commandExecEnabled || memoryEnabled)) {
             var toolContent = '';
             // Use tools.md if available, otherwise inline fallback
             if (pluginPrompts.tools) {
                 toolContent = pluginPrompts.tools;
             } else {
-                toolContent = '你可以在回复中直接使用标签调用以下功能:\n';
+                toolContent = '你可以在回复中直接使用单行标签调用以下功能:\n';
                 if (commandExecEnabled) {
-                    toolContent += '\n- 执行PowerShell: <powershell>\\n命令内容\\n</powershell> 或 <power>\\n命令内容\\n</power>\n- 执行CMD: <command>\\n命令内容\\n</command> 或 <cmd>\\n命令内容\\n</cmd>';
+                    toolContent += '\n- 执行PowerShell: <power>命令内容</power>\n- 执行CMD: <cmd>命令内容</cmd>\n- 执行Shell(bash): <shell>命令内容</shell>';
                 }
                 if (memoryEnabled) {
                     toolContent += '\n- 保存记忆: <mem:键名>内容</mem:键名>\n- 删除记忆: <mem-del:键名>';
                 }
-                if (fileOpsEnabled) {
-                    toolContent += '\n- 写入文件: <add>文件名\\n内容</add>\n- 修改文件: <mod>(文件路径)|(起始行,结束行)\\n修改内容</mod>\n- 恢复备份: <res>文件名</res>';
-                }
-                toolContent += '\n标签不会显示给用户，请自然地将标签穿插在回复中。';
+                toolContent += '\n标签不换行，直接嵌在句子中。';
             }
             parts.push(toolContent.trim());
 
@@ -254,8 +217,8 @@
         }
         if (boundaryIndex === -1) return msgs;
         for (var i = 0; i < boundaryIndex; i++) {
-            if (msgs[i]._isExec && msgs[i].role === 'system') {
-                msgs[i] = { role: 'system', content: '<End_System>', images: [], _isExec: true };
+            if (msgs[i]._isExec && (msgs[i].role === 'system' || msgs[i].role === 'tool' || msgs[i].role === 'user')) {
+                msgs[i] = { role: 'tool', content: '<End_Tool>', images: [], _isExec: true };
             }
         }
         return msgs;
@@ -290,7 +253,7 @@
         currentRequestId = requestId;
         var payload = { messages: messages, provider: currentProvider, model: currentModel, chatFormat: currentChatFormat };
         Object.keys(currentParams).forEach(function(k) { if (currentParams[k] != null) payload[k] = currentParams[k]; });
-        payload.stream = true;
+        payload.stream = streamEnabled;
         payload.requestId = requestId;
         if (currentThinkMode !== 'fast') payload.deep_think = true;
         payload.thinkMode = currentThinkMode;
@@ -298,7 +261,9 @@
         var controller = currentAbortController;
         var res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
         if (!res.ok) { var err = await res.text(); throw new Error(err); }
-        return { body: res.body, apiRequest: payload };
+        if (streamEnabled) return { body: res.body, apiRequest: payload };
+        var json = await res.json();
+        return { json: json, apiRequest: payload };
     }
 
     async function sendMessage(isRegenerate) {
@@ -312,7 +277,9 @@
         var target = fromCenter ? 'initial' : 'chat';
         var userText = ta.value.trim();
         var textFiles = activeFiles[target].filter(function(f) { return f.type === 'text'; });
-        var imgs = activeFiles[target].filter(function(f) { return f.type === 'image'; }).map(function(f) { return f.content; });
+        var imageFiles = activeFiles[target].filter(function(f) { return f.type === "image"; });
+        var videoFiles = activeFiles[target].filter(function(f) { return f.type === 'video'; });
+        var imgs = imageFiles.map(function(f) { return f.content; });
         if (!isRegenerate && !userText && !imgs.length && !textFiles.length) return;
 
         // 如果是开幕输入框首次发送，创建对话并确认到后端
@@ -338,30 +305,58 @@
                 } catch (e) { pendingNewChatIndex = null; }
             }
         }
-
         if (!isRegenerate) {
-            var displayContent = userText || (imgs.length ? _('image') : '');
-            var userMsg = { role: 'user', content: userText || (imgs.length ? _('image') : ''), images: imgs };
+            var userMsg = { role: 'user', content: userText || '', images: imgs };
             chats[currentChat].push(userMsg);
             saveChatToBackend();
-            if (textFiles.length > 0) {
+
+            // 文件 & 图片卡片网格，显示在输出上方
+            var hasCards = textFiles.length > 0 || imageFiles.length > 0 || videoFiles.length > 0;
+            if (hasCards) {
                 var grid = document.createElement('div');
                 grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:6px;';
                 textFiles.forEach(function(f) {
-                    var ext = f.fileName.split('.').pop().toUpperCase() || 'FILE';
-                    var sizeStr = ext + ' ' + Math.round((new Blob([f.content]).size / 1024) * 100) / 100 + 'KB';
                     var card = document.createElement('div');
-                    card.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bubble-user);border-radius:12px;width:160px;cursor:pointer;flex-shrink:0;';
+                    card.style.cssText = 'display:inline-flex;align-items:center;gap:12px;padding:14px 18px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;min-width:180px;cursor:pointer;flex-shrink:0;';
                     card.onclick = function() { openFileViewer(f.fileName, f.content); };
-                    card.innerHTML = '<span>' + escapeHtml(f.fileName) + '</span>';
+                    card.innerHTML =
+                        '<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#666\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">' +
+                            '<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/>' +
+                            '<polyline points=\"14 2 14 8 20 8\"/>' +
+                            '<line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/>' +
+                            '<line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>' +
+                        '</svg>' +
+                        '<span style=\"font-size:13px;color:#333;line-height:1.3;word-break:break-all;\">' + escapeHtml(f.fileName) + '</span>';
                     grid.appendChild(card);
+                });
+            }
+            if (videoFiles.length > 0) {
+                videoFiles.forEach(function(f) {
+                    chats[currentChat].push({ role: 'tool', content: f.content, _fileCard: true, _fileName: f.fileName, _imageCard: false });
+                });
+                imageFiles.forEach(function(f) {
+                    var thumb = document.createElement('div');
+                    thumb.style.cssText = 'position:relative;display:inline-block;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;cursor:pointer;flex-shrink:0;max-width:200px;';
+                    thumb.onclick = function() { openFileViewer(f.fileName, f.content); };
+                    thumb.innerHTML = '<img src="' + f.content + '" alt="' + escapeHtml(f.fileName) + '" style="max-width:200px;max-height:150px;display:block;">';
+                    grid.appendChild(thumb);
+                });
+                videoFiles.forEach(function(f) {
+                    var vwrap = document.createElement('div');
+                    vwrap.style.cssText = 'border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;flex-shrink:0;max-width:280px;';
+                    vwrap.innerHTML = '<video controls preload="metadata" style="width:100%;display:block;max-height:200px;background:#000;" src="' + f.content + '"></video>';
+                    grid.appendChild(vwrap);
                 });
                 chatAreaInner.appendChild(grid);
             }
-            addMessage(displayContent, 'user', imgs, null, userMsg);
+
+            // 有文字才显示用户气泡，纯图片不显示
+            if (userText) {
+                addMessage(userText, 'user', [], null, userMsg);
+            }
             if (textFiles.length > 0) {
                 textFiles.forEach(function(f) {
-                    chats[currentChat].push({ role: 'system', content: _('filePrefix') + f.fileName + ']\n' + f.content });
+                    chats[currentChat].push({ role: 'tool', content: _('filePrefix') + f.fileName + ']\n' + f.content, _fileCard: true, _fileName: f.fileName });
                 });
             }
             ta.value = '';
@@ -446,6 +441,33 @@
                     } catch (e) {}
                 }
 
+                // 思维链注入（CoThink）
+                if (typeof cothinkEnabled !== 'undefined' && cothinkEnabled && pluginPrompts && pluginPrompts.cothink) {
+                    var cotContent = pluginPrompts.cothink;
+                    var cotExists = iterMsgs.some(function(m) { return m.role === 'system' && m.content.indexOf('[思维链') !== -1; });
+                    if (!cotExists) {
+                        iterMsgs.unshift({ role: 'system', content: cotContent, images: [] });
+                    }
+                }
+
+                // 视频抽帧：在发请求前，从视频中提取帧作为图片加入消息
+                var vidFrames = [];
+                if (videoFiles.length > 0) {
+                    for (var vi = 0; vi < videoFiles.length; vi++) {
+                        try {
+                            var frames = await extractVideoFrames(videoFiles[vi].content, 1);
+                            var baseName = videoFiles[vi].fileName.replace(/.[^.]+$/, '');
+                            frames.forEach(function(frame, fi) {
+                                vidFrames.push({ type: 'image', fileName: baseName + '_' + fi + '.jpg', content: frame });
+                            });
+                        } catch(ve) {}
+                    }
+                }
+                if (vidFrames.length > 0) {
+                    vidFrames.forEach(function(vf) {
+                        iterMsgs.push({ role: 'user', content: '[视频帧: ' + vf.fileName + ']', images: [vf.content] });
+                    });
+                }
                 var callResult = await callAPI(iterMsgs);
                 apiRequest = callResult.apiRequest || apiRequest;
                 fullContent = '';
@@ -458,6 +480,18 @@
                 bubble.appendChild(reasoningDiv);
                 bubble.appendChild(contentDiv);
 
+                if (callResult.json) {
+                    // Non-streaming response
+                    var nr = callResult.json;
+                    fullContent = nr.choices?.[0]?.message?.content || '';
+                    fullReasoning = nr.choices?.[0]?.message?.reasoning_content || '';
+                    streamUsage = nr.usage || null;
+                    streamRequestBody = nr.apiRequest || nr.requestBody || null;
+                    if (fullReasoning) reasoningDiv.innerHTML = createThinkBlock(fullReasoning, { isThinking: false });
+                    if (fullContent) contentDiv.innerHTML = _renderAIContent(fullContent) || '...';
+                    updatePluginTimers();
+                    restoreExpandedBlocks();
+                } else {
                 var decoder = new TextDecoder();
                 var reader = callResult.body.getReader();
                 var buffer = '';
@@ -511,6 +545,7 @@
                         }
                     } catch (e) {}
                 }
+                }
 
                 // Save this iteration to chat (before agent check so non-agent mode also saves)
                 var iterAssistantMsg = { role: 'assistant', content: fullContent, reasoning: fullReasoning || null, usage: streamUsage || null, apiRequest: streamRequestBody || apiRequest || null };
@@ -523,9 +558,6 @@
                 }
                 if (memoryEnabled) {
                     try { await processMemoryCalls(fullContent); } catch (e) { console.error('[记忆调用错误]', e); }
-                }
-                if (fileOpsEnabled) {
-                    try { await processFileOpsCalls(fullContent); } catch (e) { console.error('[文件操作错误]', e); }
                 }
 
                 if (!agentEnabled) break;
@@ -588,4 +620,45 @@
             currentAbortController = null;
             updateSendBtn();
         }
+    }
+
+    async function extractVideoFrames(dataUrl, fps) {
+        fps = fps || 1;
+        return new Promise(function(resolve, reject) {
+            var video = document.createElement('video');
+            video.preload = 'metadata';
+            video.muted = true;
+            video.playsInline = true;
+            video.onerror = function() { reject(new Error('视频加载失败')); };
+            video.onloadedmetadata = function() {
+                var duration = video.duration;
+                var maxFrames = 300;
+                var totalFrames = Math.min(Math.ceil(duration), maxFrames);
+                var canvas = document.createElement('canvas');
+                var ctx = canvas.getContext('2d');
+                var frames = [];
+                var idx = 0;
+
+                function seekNext() {
+                    if (idx >= totalFrames) {
+                        video.remove();
+                        resolve(frames);
+                        return;
+                    }
+                    video.currentTime = idx;
+                }
+
+                video.onseeked = function() {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0);
+                    frames.push(canvas.toDataURL('image/jpeg', 0.6));
+                    idx++;
+                    setTimeout(seekNext, 1);
+                };
+
+                seekNext();
+            };
+            video.src = dataUrl;
+        });
     }
