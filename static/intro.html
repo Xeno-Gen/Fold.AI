@@ -183,13 +183,13 @@
         .chat-history-item{
             display:flex;align-items:center;justify-content:space-between;
             padding:10px 14px;border-radius:6px;cursor:pointer;font-size:13px;color:#555;
-            transition:var(--transition);white-space:nowrap;overflow:hidden;
+            white-space:nowrap;overflow:hidden;position:relative;
         }
         .chat-history-item:hover{background:#eaeaea;color:#1a1a1a;}
         .chat-history-item.active{background:#e0e0e0;font-weight:500;}
         .chat-history-item .history-title{flex:1;overflow:hidden;text-overflow:ellipsis;}
-        .chat-history-item .history-actions{display:none;gap:4px;margin-left:8px;}
-        .chat-history-item:hover .history-actions{display:flex;}
+        .chat-history-item .history-actions{display:flex;gap:4px;margin-left:8px;visibility:hidden;}
+        .chat-history-item:hover .history-actions{visibility:visible;}
         .history-actions .action-icon.small{width:22px;height:22px;color:#999;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;}
         .sidebar-section-title{
             font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#999;
@@ -225,8 +225,8 @@
         }
         body.chat-active .center-initial{display:none;}
         .title-container{position:relative;display:inline-block;overflow:hidden;}
-        .title-text{font-size:50px;letter-spacing:-1.5px;color:#1a1a1a;z-index:1;}
-        .title-subtitle{font-size:15px;color:#999;text-align:center;margin-top:2px;font-weight:400;z-index:1;position:relative;user-select:none;}
+        .title-text{font-size:50px;letter-spacing:-1.5px;color:var(--text,#1a1a1a);z-index:1;font-family:"PingFang SC","Noto Serif SC","Songti SC",serif;font-weight:400;user-select:none;}
+        .title-subtitle{font-size:15px;color:var(--text-secondary,#999);text-align:center;margin-top:2px;font-weight:400;user-select:none;}
         .title-beam {
     position: absolute;
     top: 0;
@@ -269,7 +269,7 @@
         .input-inner-area{padding:15px 18px 6px;}
         .input-textarea{
             width:100%;border:none;outline:none;resize:none;font-size:15px;font-family:inherit;
-            color:#1a1a1a;background:transparent;line-height:1.55;min-height:50px;max-height:160px;
+            color:#1a1a1a;background:transparent;line-height:1.55;min-height:50px;max-height:160px;padding:0;
         }
         .input-textarea::placeholder{color:#aaa;}
         .input-toolbar{
@@ -629,6 +629,8 @@
         }
 
         .toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 24px;border-radius:4px;font-size:14px;z-index:999999;transition:opacity 0.3s;}
+        @keyframes streamFadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+        .stream-fadein{animation:streamFadeIn 0.4s ease;}
         .empty-state-hint{text-align:center;color:#bbb;font-size:13px;margin-top:32px;user-select:none;}
         body.chat-active .empty-state-hint{display:none;}
 
@@ -653,7 +655,7 @@
         .slash-command-popup{position:fixed;z-index:998;background:#fbfaf7;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.1);border:0.5px solid #e4e0d8;padding:4px;min-width:220px;max-width:380px;display:none;}
         .slash-command-popup.show{display:block;animation:dropExpand 0.15s cubic-bezier(0.165,0.85,0.45,1) forwards;}
         .slash-cmd-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;transition:background 0.15s;font-family:inherit;}
-        .slash-cmd-item:hover,.slash-cmd-item.active{background:#eae6db;}
+        .slash-cmd-item:hover,.slash-cmd-item.active{background:#dce8f5;}
         .slash-cmd-item .cmd-slash{color:#3c3630;font-weight:600;white-space:nowrap;font-family:"PingFang SC","Noto Serif SC","Songti SC",serif;}
         .slash-cmd-item .cmd-desc{color:#9b968b;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
         /* 命令结果浮动卡片 */
@@ -679,7 +681,7 @@
         .slash-ghost{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;font-size:15px;font-family:inherit;line-height:1.55;padding:15px 18px 6px;white-space:pre-wrap;overflow:hidden;color:transparent;}
         .slash-ghost .ghost-completion{color:#c4c0b8;}
         [data-theme="dark"] .slash-command-popup{background:#1c1c1c;border-color:#2a2a2a;box-shadow:0 8px 32px rgba(0,0,0,0.4);}
-        [data-theme="dark"] .slash-cmd-item:hover,.slash-cmd-item.active{background:#2e2e2e;}
+        [data-theme="dark"] .slash-cmd-item:hover,[data-theme="dark"] .slash-cmd-item.active{background:#1e3050;}
         [data-theme="dark"] .slash-cmd-item .cmd-slash{color:#e0d8c8;}
         [data-theme="dark"] .slash-cmd-item .cmd-desc{color:#888;}
         [data-theme="dark"] .slash-result-overlay{background:rgba(0,0,0,0.5);}
@@ -1017,6 +1019,20 @@
                     <div class="think-mode-selector" id="autoCollapseToggle" style="display: inline-flex;">
                         <button class="think-mode-option active" data-value="true">开启</button>
                         <button class="think-mode-option" data-value="false">关闭</button>
+                    </div>
+                </div>
+                <!-- 深度思考时折叠输出 -->
+                <div class="settings-item">
+                    <div class="settings-item-left">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                        <span>深度思考时折叠</span>
+                    </div>
+                    <div class="think-mode-selector" id="thinkCollapseToggle" style="display: inline-flex;">
+                        <button class="think-mode-option" data-value="on">开启</button>
+                        <button class="think-mode-option active" data-value="off">关闭</button>
+                        <button class="think-mode-option" data-value="latest">仅最新六行</button>
                     </div>
                 </div>
             </div>

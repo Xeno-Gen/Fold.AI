@@ -257,6 +257,7 @@
         payload.requestId = requestId;
         if (currentThinkMode !== 'fast') payload.deep_think = true;
         payload.thinkMode = currentThinkMode;
+        if (typeof maxContextTokens !== 'undefined') payload.maxContextTokens = maxContextTokens;
         currentAbortController = new AbortController();
         var controller = currentAbortController;
         var res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
@@ -269,6 +270,7 @@
     async function sendMessage(isRegenerate) {
         if (streaming && !isRegenerate) return;
         if (!currentModel) { showToast(_('selectModel')); return; }
+        if (typeof _initReady !== 'undefined' && _initReady) await _initReady;
         console.log('[发送] 开始发送消息, 模型:', currentModel, '提供商:', currentProvider, '思考模式:', currentThinkMode, '格式:', currentChatFormat, '参数:', JSON.stringify({ temperature: currentParams.temperature, max_tokens: currentParams.max_tokens, top_p: currentParams.top_p }));
 
         // 先读取输入内容（必须在 newChat 之前，因为之后 isChatActive 会变化）
@@ -406,7 +408,13 @@
                 // Rebuild messages from current chat state (includes command results from previous iterations)
                 var iterMsgs = reorderMessages(
                     compressOldExecMessages(
-                        chats[currentChat].filter(function(m) { return m.role; }).map(function(m) { return { role: m.role, content: m.content, images: m.images || [], _isExec: m._isExec }; })
+                        chats[currentChat].filter(function(m) { return m.role; }).map(function(m) {
+                            var msg = { role: m.role, content: m.content, images: m.images || [], _isExec: m._isExec };
+                            if (m.role === 'assistant' && typeof includeReasoning !== 'undefined' && includeReasoning && m.reasoning) {
+                                msg.reasoning = m.reasoning.length > 2000 ? m.reasoning.substring(0, 2000) + '...' : m.reasoning;
+                            }
+                            return msg;
+                        })
                     )
                 );
                 // 构建工具/Agent 提示词（从外部 Config/Plugin/*.md 模板加载）
@@ -429,7 +437,7 @@
                 // Think mode prompts
                 if (currentThinkMode === 'deep' || currentThinkMode === 'meditate') {
                     try {
-                        var cfgFile = currentThinkMode === 'deep' ? 'DeepThink.json' : 'Medit.json';
+                        var cfgFile = currentThinkMode === 'deep' ? 'DeepThink.md' : 'Medit.md';
                         var cfgRes = await fetch('/api/config/' + cfgFile);
                         if (cfgRes.ok) {
                             var cfg = await cfgRes.json();
@@ -524,6 +532,7 @@
                                         fullContent += String(delta.content);
                                         if (fullContent) {
                                             contentDiv.innerHTML = _renderAIContent(fullContent) || '...';
+                                            if (typeof streamAnimation !== 'undefined' && streamAnimation === 'fadein' && !contentDiv.classList.contains('stream-fadein')) contentDiv.classList.add('stream-fadein');
                                             updatePluginTimers();
                                             restoreExpandedBlocks();
                                             if (!isUserScrolledAway) chatArea.scrollTop = chatArea.scrollHeight;

@@ -186,7 +186,7 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             messages, provider, model, temperature, top_p, max_tokens,
             seed, frequency_penalty, presence_penalty, top_k, stop, stream,
             chat_template_kwargs, deep_think, thinkMode, chatFormat,
-            requestId: reqId
+            requestId: reqId, maxContextTokens
         } = req.body;
 
         requestId = reqId || null;
@@ -263,6 +263,12 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             if (systemVersion) {
                 effectivePrompt = `[用户使用的系统版本: ${systemVersion}]\n${effectivePrompt}`;
             }
+            if (maxContextTokens) {
+                const ctxStr = maxContextTokens >= 1000000
+                    ? (maxContextTokens / 1000000).toFixed(0) + 'M'
+                    : (maxContextTokens / 1000).toFixed(0) + 'K';
+                effectivePrompt = `目前最大上下文 ${ctxStr} token\n${effectivePrompt}`;
+            }
             if (effectivePrompt) {
                 if (finalMessages.length > 0 && finalMessages[0].role === 'system') {
                     finalMessages[0].content = effectivePrompt + '\n\n' + finalMessages[0].content;
@@ -305,7 +311,11 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             if (chat_template_kwargs) openaiBody.chat_template_kwargs = chat_template_kwargs;
             // DeepSeek 思考强度适配
             if (provider === 'DEEPSEEK' && deep_think) {
-                const effort = thinkMode === 'meditate' ? 'max' : 'high';
+                let effort = 'high';
+                if (thinkMode === 'fast') effort = 'low';
+                else if (thinkMode === 'think') effort = 'medium';
+                else if (thinkMode === 'deep') effort = 'high';
+                else if (thinkMode === 'meditate') effort = 'max';
                 openaiBody.reasoning_effort = effort;
             } else if (deep_think !== undefined) {
                 openaiBody.deep_think = deep_think;

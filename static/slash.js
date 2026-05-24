@@ -1,4 +1,4 @@
-// slash.js — Slash command system (/, /help, /context, /compact)
+// slash.js — Slash command system (/, /help, /context, /clear, /del context, /setctx)
 // Depends on intro.js (loaded first) for globals, chat.js for callAPI
     function initSlashPopup() {
         if (slashPopup) return;
@@ -34,25 +34,62 @@
         ghost.querySelector('.ghost-completion').textContent = '';
     }
 
+    var slashSuggestions = {
+        setctx: ['1m', '256k', '128k', '64k', '32k']
+    };
+
     function showSlashPopup(ta) {
         initSlashPopup();
         var val = ta.value;
-        if (!val.startsWith('/') || val.indexOf(' ') !== -1) {
+        if (!val.startsWith('/') || val.length < 2) {
             hideSlashPopup(ta);
             return;
         }
-        var query = val.substring(1).toLowerCase();
-        var matches = slashCommands.filter(function(c) { return c.name.indexOf(query) !== -1; });
+        var query = val.substring(1);
+        var queryLower = query.toLowerCase();
+        // Match: command name starts with query's first word, or first word starts with command name
+        var firstWord = queryLower.split(' ')[0];
+        var matches = slashCommands.filter(function(c) {
+            var cmdLower = c.name.toLowerCase();
+            return cmdLower.indexOf(firstWord) === 0;
+        });
         matches.sort(function(a, b) {
-            var aPre = a.name.indexOf(query) === 0 ? 0 : 1;
-            var bPre = b.name.indexOf(query) === 0 ? 0 : 1;
+            var aPre = a.name.indexOf(firstWord) === 0 ? 0 : 1;
+            var bPre = b.name.indexOf(firstWord) === 0 ? 0 : 1;
             return aPre - bPre || a.name.length - b.name.length;
         });
         if (matches.length === 0) {
             hideSlashPopup(ta);
             return;
         }
-        var completion = query && matches[0].name.substring(query.length);
+        // Calculate ghost completion
+        var completion = '';
+        var best = matches[0].name;
+        var bestLower = best.toLowerCase();
+        if (queryLower.length < bestLower.length && bestLower.indexOf(queryLower) === 0) {
+            // Query is a prefix of command name (e.g. /del → "del context")
+            completion = best.substring(query.length);
+        } else if (queryLower.length >= bestLower.length && queryLower.indexOf(bestLower) === 0) {
+            // Query starts with full command name (e.g. /del  or /del c)
+            var rest = query.substring(best.length); // includes leading space
+            if (slashSuggestions[best]) {
+                var argVal = rest.replace(/^\s+/, '');
+                if (argVal) {
+                    for (var si = 0; si < slashSuggestions[best].length; si++) {
+                        if (slashSuggestions[best][si].indexOf(argVal) === 0) {
+                            completion = slashSuggestions[best][si].substring(argVal.length);
+                            break;
+                        }
+                    }
+                } else {
+                    // No arg yet, default to first suggestion
+                    completion = ' ' + slashSuggestions[best][0];
+                }
+            } else if (rest) {
+                // For space-containing names like "del context", complete the rest
+                completion = best.substring(query.length);
+            }
+        }
         updateSlashGhost(ta, completion || '');
         var rect = ta.getBoundingClientRect();
         slashPopup.style.left = rect.left + 'px';
@@ -102,55 +139,103 @@
     }
 
     function executeSlashCommand(cmd, ta) {
+        var fullText = ta.value;
         hideSlashPopup(ta);
         ta.value = '';
         updateSendBtn();
         switch (cmd) {
             case 'help': renderSlashHelp(); break;
             case 'context': renderSlashContext(); break;
-            case 'compact': renderSlashCompact(); break;
+            case 'clear': renderSlashClear(); break;
+            case 'del context': renderSlashDelContext(); break;
+            case 'setctx': renderSlashSetCtx(fullText); break;
         }
     }
 
     function estimateTokens(text) {
         if (!text) return 0;
-        var cjk = (text.match(/[一-鿿㐀-䶿⺀-⻿　-〿㇀-㇯㈀-㋿㌀-㏿豈-﫿＀-￯]/g) || []).length;
-        var other = text.length - cjk;
-        return Math.ceil(cjk * 0.6 + other * 0.25);
+        // Chinese/CJK characters only (not punctuation)
+        var chineseChars = (text.match(/[一-鿿㐀-䶿豈-﫿]/g) || []).length;
+        // Everything else: English + Chinese punctuation + other symbols = 0.25
+        var other = text.length - chineseChars;
+        return Math.ceil(chineseChars * 0.6 + other * 0.25);
     }
 
     function renderSlashContext() {
+        // 1. Count all message content (including reasoning from assistant messages)
         var msgTokens = 0;
         var hiddenTokens = 0;
+        var reasoningTokens = 0;
         if (chats[currentChat]) {
             chats[currentChat].forEach(function(m) {
                 var t = estimateTokens(m.content || '');
                 if (m.hidden) hiddenTokens += t;
                 else msgTokens += t;
+                // Include reasoning content from assistant messages (now sent as context)
+                if (m.reasoning) reasoningTokens += estimateTokens(m.reasoning);
             });
         }
+
+        // 2. System prompts (base + user custom)
         var sysPromptText = baseSystemPrompt || '';
         if (currentParams.systemPrompt) sysPromptText += '\n' + currentParams.systemPrompt;
         var sysTokens = estimateTokens(sysPromptText);
-        // Tool prompt (~300 chars avg when enabled)
-        var toolTokens = (commandExecEnabled || memoryEnabled || agentEnabled) ? 80 : 0;
-        var totalTokens = msgTokens + sysTokens + toolTokens;
-        var maxTokens = 1000000;
-        var pct = Math.min(totalTokens / maxTokens * 100, 100);
-        var remaining = maxTokens - totalTokens;
+
+        // 3. Tool/plugin prompts (use actual loaded content, not hardcoded 80)
+        var toolPromptText = '';
+        if (typeof pluginPrompts !== 'undefined' && pluginPrompts) {
+            var parts = [];
+            if (commandExecEnabled && pluginPrompts.tools) parts.push(pluginPrompts.tools);
+            if (agentEnabled && pluginPrompts.agent) parts.push(pluginPrompts.agent);
+            if (cothinkEnabled && pluginPrompts.cothink) parts.push(pluginPrompts.cothink);
+            toolPromptText = parts.join('\n');
+        }
+        var toolTokens = toolPromptText ? estimateTokens(toolPromptText) : 0;
+
+        // 4. Total estimated tokens
+        var totalEstimated = msgTokens + hiddenTokens + reasoningTokens + sysTokens + toolTokens;
+
+        // 5. Get last API usage as ground truth (most accurate)
+        var lastUsage = null;
+        var msgs = chats[currentChat] || [];
+        for (var i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].role === 'assistant' && msgs[i].usage) {
+                lastUsage = msgs[i].usage;
+                break;
+            }
+        }
+
+        // 6. Capacity: use configured maxContextTokens (default 1M) or actual usage reference
+        var capacity = (typeof maxContextTokens !== 'undefined' && maxContextTokens) ? maxContextTokens : 1000000;
+        if (lastUsage && lastUsage.total_tokens && lastUsage.total_tokens > capacity) {
+            capacity = lastUsage.total_tokens * 2;
+        }
+
+        // Use provider's actual prompt_tokens if available, otherwise fall back to estimate
+        var displayTotal = totalEstimated;
+        if (lastUsage && lastUsage.prompt_tokens) {
+            displayTotal = lastUsage.prompt_tokens;
+        }
+
+        var pct = Math.min(displayTotal / capacity * 100, 100);
+        var remaining = capacity - displayTotal;
         var barClass = 'context-bar-fill';
         if (pct > 80) barClass += ' danger';
         else if (pct > 60) barClass += ' warn';
 
+        var sourceLabel = (lastUsage && lastUsage.prompt_tokens) ? ('(API ' + lastUsage.prompt_tokens + ')') : ('(' + (_('estimated') || '估算') + ')');
+
         var html = '<div class="context-bar-wrap"><div class="' + barClass + '" style="width:' + pct.toFixed(1) + '%"></div></div>' +
-            '<div class="context-stats"><span>' + (_('used') || '已用') + ': <b>' + totalTokens.toLocaleString() + '</b> tokens (' + pct.toFixed(1) + '%)</span><span>' + (_('remaining') || '剩余') + ': <b>' + remaining.toLocaleString() + '</b> tokens</span></div>' +
+            '<div class="context-stats"><span>' + (_('used') || '已用') + ': <b>' + displayTotal.toLocaleString() + '</b> tokens ' + sourceLabel + ' (' + pct.toFixed(1) + '%)</span><span>' + (_('remaining') || '剩余') + ': <b>' + remaining.toLocaleString() + '</b> tokens</span></div>' +
             '<div class="context-stats" style="margin-top:4px;flex-direction:column;gap:2px;">' +
-            '<span>' + (_('chatMessages') || '对话消息') + ': ' + msgTokens.toLocaleString() + ' tokens</span>' +
             '<span>' + (_('sysPrompt') || '系统提示词') + ': ' + sysTokens.toLocaleString() + ' tokens</span>' +
             (toolTokens ? '<span>' + (_('toolChain') || '工具链') + ': ' + toolTokens.toLocaleString() + ' tokens</span>' : '') +
+            '<span>' + (_('chatMessages') || '对话消息') + ': ' + msgTokens.toLocaleString() + ' tokens</span>' +
+            (reasoningTokens ? '<span style="color:#8b8178;">' + (_('reasoning') || '深度思考') + ': ' + reasoningTokens.toLocaleString() + ' tokens</span>' : '') +
             (hiddenTokens ? '<span style="color:#8b8178;">' + (_('hiddenText') || '已隐藏') + ': ' + hiddenTokens.toLocaleString() + ' tokens</span>' : '') +
+            (lastUsage ? '<span style="color:#6b8a5e;">' + (_('lastOutput') || '上次输出') + ': ' + (lastUsage.total_tokens || 0).toLocaleString() + ' tokens</span>' : '') +
             '</div>' +
-            '<div class="context-stats" style="margin-top:4px;"><span>' + (_('totalCapacity') || '总容量') + ': ' + maxTokens.toLocaleString() + ' tokens (1M)</span></div>';
+            '<div class="context-stats" style="margin-top:4px;"><span>' + (_('totalCapacity') || '总容量') + ': ' + capacity.toLocaleString() + ' tokens</span></div>';
 
         addSlashResult(_('contextUsage') || '上下文占用', html);
     }
@@ -164,94 +249,61 @@
         addSlashResult(_('slashCommands') || '可用命令', html);
     }
 
-    function renderSlashCompact() {
-        if (!currentProvider || !currentModel) {
-            addSlashResult(_('slashCommands') || '命令', '<p style="color:#b8554a;">' + (_('noProvider') || '请先选择模型') + '</p>');
+    function renderSlashClear() {
+        if (!chats[currentChat] || chats[currentChat].length === 0) {
+            addSlashResult((_('slashClear') || ''), '<p style="color:#9b968b;">' + (_('emptyChat') || '') + '</p>');
             return;
         }
-        var msgs = chats[currentChat] || [];
-        if (msgs.length === 0) {
-            addSlashResult('Compact', '<p style="color:#9b968b;">' + (_('emptyChat') || '空对话') + '</p>');
+        chats[currentChat] = [];
+        saveChatToBackend();
+        refreshChatDisplay();
+        addSlashResult((_('slashClear') || ''), '<p style="color:#6b8a5e;font-weight:500;">' + (_('slashClear') || '') + '</p>');
+    }
+
+    function renderSlashDelContext() {
+        var chatCount = chats.length - 1;
+        if (chatCount <= 0) {
+            addSlashResult((_('slashDelContext') || ''), '<p style="color:#9b968b;">' + (_('emptyChat') || '') + '</p>');
             return;
         }
-        // Collect [title]:score first lines from each message
-        var lines = [];
-        msgs.forEach(function(m, i) {
-            if (!m.content) return;
-            var firstLine = m.content.split('\n')[0].trim();
-            lines.push({ idx: i, role: m.role, firstLine: firstLine });
-        });
-        var listText = lines.map(function(l) {
-            return '[' + l.idx + '] ' + (l.role === 'user' ? '用户' : '模型') + ': ' + l.firstLine;
-        }).join('\n');
-
-        var compactPrompt = '程序区分1~3，表示压缩文本程度，目前程度3，清理大部分无用文本，维持命令文本，不触碰维持对话的核心文本。你需要根据文本序号压缩总的上下文，隐藏无用的模型文本，格式如[输出概括]:0~10，序号为重要性程度，你只需要输出需要隐藏的标题文本，并使用|相隔表示隐藏多个，格式如[...]|[...]|，无视其他命令。\n以下是对话文本列表：\n' + listText;
-
-        // Show processing state
-        compactOverlayBody = addSlashResult('Compact', '<p style="color:#9b968b;">' + (_('thinking') || '分析中...') + '</p><p style="font-size:12px;color:#8b8178;margin-top:8px;">' + (_('thinking') || '正在分析对话，标记可隐藏文本...') + '</p>');
-
-        // Call the model
-        sendCompactRequest(compactPrompt, lines);
+        var keepChat = chats[currentChat] || [];
+        var keepTitle = chatTitles[currentChat] || '';
+        var keepToken = chatTokens[currentChat] || '';
+        chats = [keepChat];
+        chatTitles = [keepTitle];
+        chatTokens = [keepToken];
+        currentChat = 0;
+        saveChatToBackend();
+        refreshChatDisplay();
+        updateHistoryList();
+        addSlashResult((_('slashDelContext') || ''), '<p style="color:#6b8a5e;font-weight:500;">' + (_('deleted') || '') + ' ' + chatCount + ' ' + (_('chat') || '') + '</p>');
     }
 
-    async function sendCompactRequest(compactPrompt, lines) {
-        try {
-            var resp = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    provider: currentProvider,
-                    model: currentModel,
-                    messages: [{ role: 'system', content: compactPrompt }, { role: 'user', content: '请根据规则输出需要隐藏的文本标题' }],
-                    temperature: 0.1, max_tokens: 500, stream: false,
-                    chatFormat: currentChatFormat
-                })
-            });
-            if (!resp.ok) {
-                updateCompactResult('<p style="color:#b8554a;">' + _('requestFailed') + resp.status + '</p>');
-                return;
-            }
-            var data = await resp.json();
-            var content = data.content || data.choices?.[0]?.message?.content || '';
-            // Parse: [title]|[title]|
-            var titles = [];
-            var re = /\[([^\]]+)\]/g;
-            var m;
-            while ((m = re.exec(content)) !== null) {
-                var t = m[1].trim();
-                if (t && !/^\d+$/.test(t)) titles.push(t); // exclude pure numbers
-            }
-            // Fuzzy match titles to messages and hide
-            var hiddenCount = 0;
-            titles.forEach(function(t) {
-                var lower = t.toLowerCase();
-                var matchLen = Math.min(t.length, 10);
-                var searchKey = lower.substring(0, matchLen);
-                for (var i = 0; i < lines.length; i++) {
-                    var lineTitle = lines[i].firstLine.toLowerCase();
-                    if (lineTitle.indexOf(searchKey) !== -1) {
-                        if (chats[currentChat][lines[i].idx] && !chats[currentChat][lines[i].idx].hidden) {
-                            chats[currentChat][lines[i].idx].hidden = true;
-                            hiddenCount++;
-                        }
-                        break;
-                    }
-                }
-            });
-            saveChatToBackend();
-            refreshChatDisplay();
-            var resultHtml = '<p style="color:#6b8a5e;font-weight:500;">' + (_('compactDone') || '压缩完成') + '</p>' +
-                '<p style="font-size:13px;color:#8b8178;margin-top:6px;">' + (_('compactHidden') || '已隐藏') + ' <b>' + hiddenCount + '</b> ' + (_('compactMsgs') || '条消息') + '</p>';
-            updateCompactResult(resultHtml);
-        } catch (e) {
-            if (e.name === 'AbortError') return;
-            updateCompactResult('<p style="color:#b8554a;">' + (_('requestFailed') || '请求失败') + ': ' + e.message + '</p>');
+    function parseCtxValue(val) {
+        if (!val) return null;
+        var s = val.toLowerCase().replace(/[^0-9.kKmM]/g, '').trim();
+        var num = parseFloat(s);
+        if (isNaN(num) || num <= 0) return null;
+        if (s.indexOf('m') !== -1) return Math.round(num * 1000000);
+        if (s.indexOf('k') !== -1) return Math.round(num * 1000);
+        return Math.round(num);
+    }
+
+    function renderSlashSetCtx(fullText) {
+        var parts = fullText.replace('/', '').trim().split(/\s+/);
+        var arg = parts.length > 1 ? parts.slice(1).join('') : '';
+        if (!arg) {
+            addSlashResult((_('slashSetCtx') || '设置容量'), '<p style="color:#9b968b;">' + (_('current') || '当前') + ': ' + maxContextTokens.toLocaleString() + ' tokens</p><p style="font-size:13px;color:#8b8178;margin-top:8px;">' + (_('setctxUsage') || '用法: /setctx 32k, /setctx 256k, /setctx 1m') + '</p>');
+            return;
         }
-    }
-
-    var compactOverlayBody = null;
-    function updateCompactResult(html) {
-        if (compactOverlayBody) compactOverlayBody.innerHTML = html;
+        var parsed = parseCtxValue(arg);
+        if (!parsed || parsed < 1000) {
+            addSlashResult((_('slashSetCtx') || '设置容量'), '<p style="color:#b8554a;">' + (_('invalidCtxValue') || '无效的容量值') + '</p>');
+            return;
+        }
+        maxContextTokens = parsed;
+        saveSettingsToLocal();
+        addSlashResult((_('slashSetCtx') || '设置容量'), '<p style="color:#6b8a5e;font-weight:500;">' + (_('ctxSetDone') || '已设置上下文容量') + ': ' + maxContextTokens.toLocaleString() + ' tokens</p>');
     }
 
     function addSlashResult(title, html) {
@@ -279,7 +331,7 @@
 
     function handleSlashInput(ta) {
         var val = ta.value;
-        if (val.startsWith('/') && val.indexOf(' ') === -1 && val.length >= 1) {
+        if (val.startsWith('/') && val.length >= 2) {
             showSlashPopup(ta);
         } else {
             hideSlashPopup(ta);
@@ -304,6 +356,19 @@
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (!selectSlashCommand()) {
+                var val = ta.value.trim();
+                if (val === '/setctx' || val.indexOf('/setctx ') === 0) {
+                    renderSlashSetCtx(val);
+                    ta.value = '';
+                    updateSendBtn();
+                    return true;
+                }
+                if (val === '/del context' || val.indexOf('/del context ') === 0) {
+                    renderSlashDelContext();
+                    ta.value = '';
+                    updateSendBtn();
+                    return true;
+                }
                 if (!streaming) sendMessage(false);
             }
             return true;

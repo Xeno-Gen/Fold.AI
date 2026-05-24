@@ -7,80 +7,163 @@ import { getUsage } from '../user/manager';
 export const chatsRouter = Router();
 const DATA_DIR = path.join(__dirname, '../../data/users');
 
-function getChatsFilePath(userToken: string): string {
-    return path.join(DATA_DIR, userToken, 'chats.json');
+function getChatsDir(userToken: string): string {
+    return path.join(DATA_DIR, userToken, 'chats');
+}
+
+function getIndexPath(userToken: string): string {
+    return path.join(getChatsDir(userToken), '_index.json');
+}
+
+function getChatFilePath(userToken: string, id: number): string {
+    return path.join(getChatsDir(userToken), id + '.json');
 }
 
 function generateToken(): string {
     return crypto.randomBytes(12).toString('base64url').substring(0, 16);
 }
 
-function readChats(userToken: string): any[] {
-    const filePath = getChatsFilePath(userToken);
-    if (!fs.existsSync(filePath)) return [];
-    const chats = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    // 为没有 token 的旧对话生成 token
-    chats.forEach((c: any) => {
-        if (!c.token) c.token = generateToken();
-    });
-    // 保存回文件以便后续使用
-    writeChats(userToken, chats);
-    return chats;
+// 读取索引（仅元数据），自动迁移旧格式
+function readIndex(userToken: string): any[] {
+    const chatsDir = getChatsDir(userToken);
+    const indexPath = getIndexPath(userToken);
+
+    // 迁移：旧版 chats.json → 单文件格式
+    const oldPath = path.join(DATA_DIR, userToken, 'chats.json');
+    if (fs.existsSync(oldPath)) {
+        try {
+            const raw = fs.readFileSync(oldPath, 'utf-8');
+            const old = JSON.parse(raw);
+            if (Array.isArray(old) && old.length > 0) {
+                if (!fs.existsSync(chatsDir)) fs.mkdirSync(chatsDir, { recursive: true });
+                const idx: any[] = [];
+                old.forEach((chat: any, i: number) => {
+                    if (!chat.token) chat.token = generateToken();
+                    fs.writeFileSync(getChatFilePath(userToken, i), JSON.stringify(chat));
+                    idx.push({ id: i, title: chat.title || '', token: chat.token });
+                });
+                fs.writeFileSync(indexPath, JSON.stringify(idx));
+                fs.unlinkSync(oldPath);
+                return idx;
+            }
+        } catch (e) {
+            // 旧文件损坏，删除
+            try { fs.unlinkSync(oldPath); } catch (_) {}
+        }
+    }
+
+    if (!fs.existsSync(indexPath)) return [];
+    try {
+        return JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+    } catch (e) {
+        return [];
+    }
 }
 
-function writeChats(userToken: string, chats: any[]) {
-    const filePath = getChatsFilePath(userToken);
-    fs.writeFileSync(filePath, JSON.stringify(chats, null, 2));
+function writeIndex(userToken: string, index: any[]) {
+    const dir = getChatsDir(userToken);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(getIndexPath(userToken), JSON.stringify(index));
 }
 
-// 获取对话列表（含 token）
+// 读取单个对话完整数据
+function readChatById(userToken: string, id: number): any | null {
+    const filePath = getChatFilePath(userToken, id);
+    if (!fs.existsSync(filePath)) return null;
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch (e) {
+        return null;
+    }
+}
+
+function writeChatById(userToken: string, id: number, data: any) {
+    const dir = getChatsDir(userToken);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(getChatFilePath(userToken, id), JSON.stringify(data));
+}
+
+function deleteChatById(userToken: string, id: number) {
+    const filePath = getChatFilePath(userToken, id);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
+
+// 获取对话列表（仅元数据）
 chatsRouter.get('/chats', (req: Request, res: Response) => {
-    const chats = readChats(req.userToken!);
-    res.json(chats.map((c, i) => ({ id: i, title: c.title, token: c.token })));
+    const index = readIndex(req.userToken!);
+    res.json(index);
 });
 
 // 通过 token 获取对话
 chatsRouter.get('/chat/by-token/:token', (req: Request, res: Response) => {
-    const chats = readChats(req.userToken!);
-    const chat = chats.find((c: any) => c.token === req.params.token);
+    const index = readIndex(req.userToken!);
+    const entry = index.find((c: any) => c.token === req.params.token);
+    if (!entry) return res.status(404).json({ error: '对话不存在' });
+    const chat = readChatById(req.userToken!, entry.id);
     if (!chat) return res.status(404).json({ error: '对话不存在' });
     res.json(chat);
 });
 
 // 通过 id 获取对话
 chatsRouter.get('/chat/:id', (req: Request, res: Response) => {
-    const chats = readChats(req.userToken!);
     const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 0 || id >= chats.length) return res.status(404).json({ error: '对话不存在' });
-    res.json(chats[id]);
+    if (isNaN(id)) return res.status(404).json({ error: '对话不存在' });
+    const chat = readChatById(req.userToken!, id);
+    if (!chat) return res.status(404).json({ error: '对话不存在' });
+    res.json(chat);
 });
 
 // 创建新对话
 chatsRouter.post('/chats', (req: Request, res: Response) => {
-    const chats = readChats(req.userToken!);
+    const index = readIndex(req.userToken!);
+    const id = index.length;
     const newChat = { title: '新对话', messages: [], token: generateToken() };
-    chats.push(newChat);
-    writeChats(req.userToken!, chats);
-    res.json({ id: chats.length - 1, title: newChat.title, token: newChat.token });
+    writeChatById(req.userToken!, id, newChat);
+    index.push({ id, title: newChat.title, token: newChat.token });
+    writeIndex(req.userToken!, index);
+    res.json({ id, title: newChat.title, token: newChat.token });
 });
 
 // 更新对话
 chatsRouter.put('/chat/:id', (req: Request, res: Response) => {
-    const chats = readChats(req.userToken!);
     const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 0 || id >= chats.length) return res.status(404).json({ error: '聊天不存在' });
-    chats[id] = req.body;
-    writeChats(req.userToken!, chats);
+    if (isNaN(id)) return res.status(404).json({ error: '聊天不存在' });
+    const chat = req.body;
+    writeChatById(req.userToken!, id, chat);
+    // 更新索引中的标题和 token
+    const index = readIndex(req.userToken!);
+    const entry = index.find((c: any) => c.id === id);
+    if (entry) {
+        entry.title = chat.title || entry.title;
+        entry.token = chat.token || entry.token;
+    } else {
+        index.push({ id, title: chat.title || '', token: chat.token || '' });
+    }
+    writeIndex(req.userToken!, index);
     res.json({ success: true });
 });
 
 // 删除对话
 chatsRouter.delete('/chat/:id', (req: Request, res: Response) => {
-    const chats = readChats(req.userToken!);
     const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 0 || id >= chats.length) return res.status(404).json({ error: '聊天不存在' });
-    chats.splice(id, 1);
-    writeChats(req.userToken!, chats);
+    if (isNaN(id)) return res.status(404).json({ error: '聊天不存在' });
+    deleteChatById(req.userToken!, id);
+    const index = readIndex(req.userToken!);
+    // 重新编号后续对话，保证 ID 连续（前端使用数组下标作为 ID）
+    const renumbered = index
+        .filter((c: any) => c.id !== id)
+        .map((c: any, newId: number) => {
+            if (c.id !== newId) {
+                const oldFile = getChatFilePath(req.userToken!, c.id);
+                const newFile = getChatFilePath(req.userToken!, newId);
+                try {
+                    if (fs.existsSync(oldFile)) fs.renameSync(oldFile, newFile);
+                } catch (_) {}
+                c.id = newId;
+            }
+            return c;
+        });
+    writeIndex(req.userToken!, renumbered);
     res.json({ success: true });
 });
 

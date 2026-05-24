@@ -69,3 +69,24 @@ configRouter.post('/config', (req: Request, res: Response) => {
     saveUserConfig(req.userToken!, userConfig);
     res.json({ success: true });
 });
+
+// 提供思考模式配置文件（.md 格式）
+configRouter.get('/config/:file', (req: Request, res: Response) => {
+    const fileName = req.params.file;
+    // Only allow specific files for security
+    if (fileName !== 'DeepThink.md' && fileName !== 'Medit.md') {
+        return res.status(404).json({ error: '未找到配置文件' });
+    }
+    const configDir = path.join(__dirname, '../../config');
+    const filePath = path.join(configDir, fileName);
+    try {
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: '配置文件不存在' });
+        }
+        const content = fs.readFileSync(filePath, 'utf-8');
+        // Return as JSON with the content in a "think" field for compatibility
+        res.json({ think: content });
+    } catch (e) {
+        res.status(500).json({ error: '读取配置文件失败' });
+    }
+});

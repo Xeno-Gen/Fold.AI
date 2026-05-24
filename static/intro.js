@@ -61,6 +61,9 @@ window.showToast = function(msg) {
     var customPort = 8080, providers = [], availableModels = [], allModels = [];
     var pureMode = false;
     var autoCollapseThink = true;
+    var thinkCollapseDuring = 'off';
+    var streamAnimation = 'none';
+    var includeReasoning = true;
     var chatFontSize = 15;
     var lastScrollTop = 0;
     var baseSystemPrompt = '';
@@ -69,6 +72,8 @@ window.showToast = function(msg) {
     var pluginPrompts = {};
     var pinnedChats = new Set();
     var pendingNewChatIndex = null;
+    var _initReady = null;
+    var maxContextTokens = 1000000;
 
     function generateToken() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -121,8 +126,12 @@ window.showToast = function(msg) {
                 currentThinkMode = s.thinkMode === 'direct' ? 'fast' : (s.thinkMode || 'fast');
                 deepThinkEnabled = s.deepThink || false;
                 if (s.autoCollapseThink !== undefined) autoCollapseThink = s.autoCollapseThink;
+                if (s.thinkCollapseDuring !== undefined) thinkCollapseDuring = s.thinkCollapseDuring;
+                if (s.streamAnimation !== undefined) streamAnimation = s.streamAnimation;
                 if (s.streamEnabled !== undefined) streamEnabled = s.streamEnabled;
                 if (s.cothinkEnabled !== undefined) cothinkEnabled = s.cothinkEnabled;
+                if (s.includeReasoning !== undefined) includeReasoning = s.includeReasoning;
+                if (s.maxContextTokens !== undefined) maxContextTokens = s.maxContextTokens;
             }
         } catch (e) {}
         applyTheme(currentTheme);
@@ -133,7 +142,7 @@ window.showToast = function(msg) {
 
     function saveSettingsToLocal() {
         try {
-            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled }));
+            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation }));
         } catch (e) {}
     }
 
@@ -349,6 +358,7 @@ window.showToast = function(msg) {
     var settingsLastTab = localStorage.getItem('fold_settings_tab') || 'preferences';
     var settingsTabMeta = [
         { id: 'preferences', label: _('preferences'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
+        { id: 'parameters', label: _('parameters'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' },
         { id: 'plugins', label: _('plugins'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
         { id: 'memories', label: _('memories'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>' },
         { id: 'usage', label: _('usage'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' },
@@ -393,6 +403,7 @@ window.showToast = function(msg) {
             });
         }
         if (tab === 'preferences') renderPreferencesTab();
+        else if (tab === 'parameters') renderParametersTab();
         else if (tab === 'plugins') renderPluginsTab();
         else if (tab === 'memories') renderMemoriesTab();
         else if (tab === 'usage') { loadUsageStats().then(function() { renderUsageTab(); }); }
@@ -413,13 +424,24 @@ window.showToast = function(msg) {
             '<button class="think-mode-option' + (!chatFontSize || chatFontSize === 15 ? ' active' : '') + '" data-size="15">15</button>' +
             '<button class="think-mode-option' + (chatFontSize === 17 ? ' active' : '') + '" data-size="17">17</button>' +
             '<button class="think-mode-option' + (chatFontSize === 19 ? ' active' : '') + '" data-size="19">19</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + _('thinkAfterAutoCollapse') + '</span><div class="think-mode-selector" id="settingsAutoCollapseToggle" style="display:inline-flex;">' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('thinkAfterAutoCollapse') || '思考后自动折叠') + '</span><div class="think-mode-selector" id="settingsAutoCollapseToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (autoCollapseThink ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!autoCollapseThink ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>' +
+            '<button class="think-mode-option' + (!autoCollapseThink ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' + (_('thinkCollapseMode') || '深度思考时折叠') + '</span><div class="think-mode-selector" id="settingsThinkCollapseToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (thinkCollapseDuring === 'on' ? ' active' : '') + '" data-value="on">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (thinkCollapseDuring === 'off' ? ' active' : '') + '" data-value="off">' + _('off') + '</button>' +
+            '<button class="think-mode-option' + (thinkCollapseDuring === 'latest' ? ' active' : '') + '" data-value="latest">' + (_('latest') || '仅最新六行') + '</button></div></div></div>' +
+            '<div class="settings-section"><div class="settings-section-title">' + (_('animation') || '动画') + '</div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + (_('streamFadeIn') || '流式渐显') + '</span><div class="think-mode-selector" id="settingsStreamAnimToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (streamAnimation === 'fadein' ? ' active' : '') + '" data-value="fadein">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (streamAnimation !== 'fadein' ? ' active' : '') + '" data-value="none">' + _('off') + '</button></div></div></div>' +
             '<div class="settings-section"><div class="settings-section-title">' + (_('model') || '模型') + '</div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' + '流式输出' + '</span><div class="think-mode-selector" id="settingsStreamToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (streamEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!streamEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
+            '<button class="think-mode-option' + (!streamEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('includeReasoning') || '上下文并入深度思考') + '</span><div class="think-mode-selector" id="settingsIncludeReasoningToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (includeReasoning ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (!includeReasoning ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
         // 字体
         var fontSelect = document.getElementById('settingsFontSelect');
         if (fontSelect) {
@@ -456,6 +478,20 @@ window.showToast = function(msg) {
                 settingsPanelContent.querySelectorAll('#settingsAutoCollapseToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
+        settingsPanelContent.querySelectorAll('#settingsThinkCollapseToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                thinkCollapseDuring = o.dataset.value;
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsThinkCollapseToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+        settingsPanelContent.querySelectorAll('#settingsStreamAnimToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                streamAnimation = o.dataset.value;
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsStreamAnimToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
         settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(o) {
             o.onclick = function() {
                 streamEnabled = o.dataset.value === 'true';
@@ -463,6 +499,22 @@ window.showToast = function(msg) {
                 settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
+        settingsPanelContent.querySelectorAll('#settingsIncludeReasoningToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                includeReasoning = o.dataset.value === 'true';
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsIncludeReasoningToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+    }
+
+    function renderParametersTab() {
+        if (!settingsPanelContent) return;
+        var ctxVal = (typeof maxContextTokens !== 'undefined' ? maxContextTokens : 1000000);
+        var ctxStr = ctxVal >= 1000000 ? (ctxVal / 1000000).toFixed(0) + 'M' : (ctxVal / 1000) + 'K';
+        settingsPanelContent.innerHTML = '<div class="settings-section"><div class="settings-section-title">' + (_('parameters') || '参数') + '</div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' + (_('totalCapacity') || '上下文容量') + '</span><span style="font-size:13px;color:#888;">' + ctxStr + ' token</span></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' + (_('thinkMode') || '思考模式') + '</span><span style="font-size:13px;color:#888;">' + (currentThinkMode === 'fast' ? (_('fast') || '快速') + ' — low' : currentThinkMode === 'think' ? (_('think') || '思考') + ' — medium' : currentThinkMode === 'deep' ? (_('deep') || '沉思') + ' — high' : (_('meditate') || '静思') + ' — max') + '</span></div></div>';
     }
 
     function renderPluginsTab() {
@@ -670,6 +722,8 @@ window.showToast = function(msg) {
         if (c) { commandConfirmEnabled = c.dataset.value === 'true'; renderSettingsModal(); saveSettingsToLocal(); if (window.CommandExecutionPlugin) window.CommandExecutionPlugin.setConfirmBeforeExecution(commandConfirmEnabled); }
         const a = e.target.closest('#autoCollapseToggle .think-mode-option');
         if (a) { autoCollapseThink = a.dataset.value === 'true'; e.target.closest('#autoCollapseToggle').querySelectorAll('.think-mode-option').forEach(function(x) { x.classList.toggle('active', x === a); }); saveSettingsToLocal(); }
+        const tc = e.target.closest('#thinkCollapseToggle .think-mode-option');
+        if (tc) { thinkCollapseDuring = tc.dataset.value; e.target.closest('#thinkCollapseToggle').querySelectorAll('.think-mode-option').forEach(function(x) { x.classList.toggle('active', x === tc); }); saveSettingsToLocal(); }
     });
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (currentTheme === 'system') applyTheme('system'); });
@@ -1168,6 +1222,8 @@ window.showToast = function(msg) {
         opts = opts || {};
         var isThinking = opts.isThinking || false;
         var elapsedSeconds = opts.elapsedSeconds || 0;
+        var tokenCount = (typeof estimateTokens !== 'undefined' && reasoning) ? estimateTokens(reasoning) : 0;
+        var tokenStr = tokenCount ? ' (' + formatTokens(tokenCount) + ' Tokens)' : '';
         var titleText;
         if (isThinking) {
             titleText = _('thinkingDeep');
@@ -1176,8 +1232,20 @@ window.showToast = function(msg) {
         } else {
             titleText = _('thoughtDeep');
         }
+        // 思考完后自动折叠
         var collapsedClass = (!isThinking && autoCollapseThink) ? ' collapsed' : '';
-        return '<div class="think-block' + collapsedClass + '" style="margin-left:-12px;"><div class="think-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><div class="think-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg></div><span>' + titleText + '</span><div class="think-arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg></div></div><div class="think-body-wrapper"><div class="think-line"></div><div class="think-content">' + escapeHtml(reasoning).replace(/\n/g, '<br>') + '</div></div></div>';
+        // 深度思考时的显示模式
+        var duringMode = isThinking ? thinkCollapseDuring : 'off';
+        var displayReasoning = reasoning;
+        var contentSuffix = '';
+        if (duringMode === 'latest' && reasoning) {
+            var lines = reasoning.trim().split('\n');
+            displayReasoning = lines.slice(-6).join('\n') || reasoning;
+            contentSuffix = ' think-content-fade';
+        } else if (duringMode === 'on') {
+            collapsedClass = ' collapsed';
+        }
+        return '<div class="think-block' + collapsedClass + '" style="margin-left:-12px;"><div class="think-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><div class="think-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg></div><span>' + titleText + '</span>' + (tokenStr ? '<span class="pb-tokens">' + tokenStr + '</span>' : '') + '<div class="think-arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg></div></div><div class="think-body-wrapper"><div class="think-line"></div><div class="think-content' + contentSuffix + '">' + escapeHtml(displayReasoning).replace(/\n/g, '<br>') + '</div></div></div>';
     }
 
     function createMessageBubble(content, role, images, reasoning, msgRef, cotHtml) {
@@ -1360,6 +1428,7 @@ window.showToast = function(msg) {
     function refreshChatDisplay() {
         if (!chatAreaInner) return;
         chatAreaInner.innerHTML = '';
+        if (!chatAreaInner) return;
         if (chats[currentChat] && chats[currentChat].length > 0) {
             document.body.classList.add('chat-active');
             chats[currentChat].forEach(function(m) {
@@ -1709,10 +1778,10 @@ window.showToast = function(msg) {
         if (idx === currentChat && isChatActive) return;
         currentChat = idx;
         updateUrlWithToken();
-        if (chatAreaInner) chatAreaInner.innerHTML = '';
         activeFiles['chat'] = [];
         if (chatPreview) renderPreviews(chatPreview, []);
         if (chatText) chatText.value = '';
+        if (chatAreaInner) chatAreaInner.innerHTML = '';
         // Lazy load chat messages if not loaded yet
         if (!chats[idx]) {
             try {
@@ -1949,7 +2018,9 @@ window.showToast = function(msg) {
     var slashCommands = [
         { name: 'help', desc: _('slashHelp') || '显示可用命令帮助' },
         { name: 'context', desc: _('slashContext') || '显示当前上下文占用情况' },
-        { name: 'compact', desc: _('slashCompact') || '压缩上下文，隐藏无用文本' }
+        { name: 'clear', desc: _('slashClear') || '清空当前对话输出' },
+        { name: 'del context', desc: _('slashDelContext') || '删除全部历史对话' },
+        { name: 'setctx', desc: _('slashSetCtx') || '设置上下文容量，如 /setctx 32k、/setctx 1m' }
     ];
     var slashPopup = null;
     var slashActiveIndex = -1;
@@ -2127,7 +2198,7 @@ window.showToast = function(msg) {
         try { var r = await fetch('/com/ver.json'); if (r.ok) { var d = await r.json(); var ve = document.getElementById('versionDisplay'); if (ve) ve.textContent = '版本 ' + (d.stage || '') + ' ' + (d.ver || '') + ' · Fold.AI'; } } catch (e) {}
     })();
 
-    (async function() {
+    _initReady = (async function() {
         // 检查服务端嵌入的对话数据（/chat/{token} 时）
         // 嵌入数据只用于防闪（提前隐藏开幕 + 标出当前 token），
         // 数据加载仍然走 loadChatsFromBackend 保证完整

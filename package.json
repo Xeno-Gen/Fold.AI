@@ -1,8 +1,8 @@
 {
   "name": "fold.ai",
-  "version": "1.0.0",
-  "description": "Fold.AI — 自托管多模型 AI 聊天前端，支持 OpenAI / Anthropic 协议，带命令执行、文件操作、记忆等插件",
-  "main": "dist/bin/server.js",
+  "version": "0.3.3",
+  "description": "Fold.AI",
+  "main": "bin/server.js",
   "bin": {
     "fold.ai": "bin/cli.js",
     "fold-ai": "bin/cli.js"

@@ -39,7 +39,7 @@ const envData = parseEnv(envContent);
 
 // 默认参数
 const defaultParams = {
-    max_tokens: parseInt(envData.MAX_TOKENS) || 6000,
+    max_tokens: parseInt(envData.MAX_TOKENS) || null,
     temperature: parseFloat(envData.TEMPERATURE) || 0.6,
     top_p: parseFloat(envData.TOP_P) || 1.0,
     seed: envData.SEED && envData.SEED !== 'null' ? parseInt(envData.SEED) : null,
