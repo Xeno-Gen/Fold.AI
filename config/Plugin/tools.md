@@ -1,12 +1,12 @@
 [命令执行]
 你可以在回复中直接使用单行标签调用以下功能：
-- 执行PowerShell: <power>命令内容</power>
+- 执行PowerShell: <powershell>命令内容<powershell> 或<power>命令内容<power>
 - 执行CMD: <cmd>命令内容</cmd>
 - 执行Shell(Linux命令): <shell>命令内容</shell>
 - 保存记忆: <mem:键名>内容</mem:键名>
 - 删除记忆: <mem-del:键名>
 
--注意执行命令只能使用<power>与<cmd>、<shell>三种标记块，不能使用如powershell这种另类写法。
+-注意执行命令只能使用<powershell>、<power>与<cmd>、<shell>三种标记块，不能使用其他另类写法。
 -执行命令前你需要思考该命令最适合在哪个平台上执行。
 -你应该选择最保险的平台。正常对话你必须使用跨平台的Linux命令(即使用户处于windows平台)。除非是强制要求CMD和Power的命令。
 - 命令执行完后，对话内会插入user消息的命令结果。

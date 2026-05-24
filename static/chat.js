@@ -9,6 +9,7 @@
         return text
             .replace(/<mem:[^>]+>[\s\S]*?<\/mem:[^>]+>/gi, '')
             .replace(/<power>[\s\S]*?<\/power>/gi, '')
+            .replace(/<powershell>[\s\S]*?<\/powershell>/gi, '')
             .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
             .replace(/<shell>[\s\S]*?<\/shell>/gi, '')
             .replace(/<mem-del:[^>]+>/gi, '')
@@ -17,13 +18,17 @@
     }
 
     async function processToolCalls(responseText) {
-        // Parse <power>...</power>, <cmd>...</cmd> and <shell>...</shell> tags
+        // Parse <power>...</power>, <powershell>...</powershell>, <cmd>...</cmd> and <shell>...</shell> tags
         var commands = [];
         var powerRegex = /<power>([\s\S]*?)<\/power>/gi;
+        var psRegex = /<powershell>([\s\S]*?)<\/powershell>/gi;
         var cmdRegex = /<cmd>([\s\S]*?)<\/cmd>/gi;
         var shellRegex = /<shell>([\s\S]*?)<\/shell>/gi;
         var match;
         while ((match = powerRegex.exec(responseText)) !== null) {
+            commands.push({ idx: commands.length, shell: 'powershell', command: match[1].trim() });
+        }
+        while ((match = psRegex.exec(responseText)) !== null) {
             commands.push({ idx: commands.length, shell: 'powershell', command: match[1].trim() });
         }
         while ((match = cmdRegex.exec(responseText)) !== null) {
@@ -175,7 +180,7 @@
             } else {
                 toolContent = '你可以在回复中直接使用单行标签调用以下功能:\n';
                 if (commandExecEnabled) {
-                    toolContent += '\n- 执行PowerShell: <power>命令内容</power>\n- 执行CMD: <cmd>命令内容</cmd>\n- 执行Shell(bash): <shell>命令内容</shell>';
+                    toolContent += '\n- 执行PowerShell: <powershell>命令内容</powershell> 或 <power>命令内容</power>\n- 执行CMD: <cmd>命令内容</cmd>\n- 执行Shell(bash): <shell>命令内容</shell>';
                 }
                 if (memoryEnabled) {
                     toolContent += '\n- 保存记忆: <mem:键名>内容</mem:键名>\n- 删除记忆: <mem-del:键名>';
