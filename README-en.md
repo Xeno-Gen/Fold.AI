@@ -1,12 +1,9 @@
 # Fold.AI
 
-
 [![Node.js](https://img.shields.io/badge/Node.js-v20--v25.9.0-brightgreen?logo=node.js)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](#license)
 [![npx](https://img.shields.io/badge/npx-11.12.1-blue?logo=npm)](https://www.npmjs.com/package/npx)
-
-<img width="872" height="753" alt="image" src="https://github.com/user-attachments/assets/98a3e0f1-1c9f-47d1-aacb-540f7dbcf598" />
 
 ## README in Different Languages
 [English README](https://github.com/Xeno-Gen/Fold.AI/edit/main/README-en.md)
