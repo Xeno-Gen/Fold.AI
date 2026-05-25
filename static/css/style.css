@@ -451,6 +451,51 @@ input:checked + .slider::before {
     font-size: 14px; color: #333; display: flex; align-items: center; gap: 10px;
 }
 .settings-panel-content .settings-item-label svg { color: #888; flex-shrink: 0; }
+.settings-font-select {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 0.5px solid #ddd;
+    font-size: 13px;
+    background: #fff;
+    font-family: inherit;
+    color: #333;
+    cursor: pointer;
+}
+[data-theme="dark"] .settings-font-select {
+    background: #1f1f1f;
+    border-color: #2a2a2a;
+    color: #e8e8e8;
+}
+.settings-update-btn {
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: var(--text-secondary, #888);
+    transition: color 0.15s;
+    user-select: none;
+}
+.settings-update-btn:hover {
+    color: var(--text, #333);
+}
+.settings-update-btn.checking {
+    pointer-events: none;
+    opacity: 0.6;
+}
+.settings-update-btn.has-update {
+    color: #4ade80;
+    font-weight: 500;
+}
+.settings-update-btn.has-update:hover {
+    color: #22c55e;
+}
+[data-theme="dark"] .settings-update-btn:hover {
+    color: var(--text, #e8e8e8);
+}
+[data-theme="dark"] .settings-update-btn.has-update {
+    color: #4ade80;
+}
 
 /* ========== 设置模态框 ========== */
 .settings-modal-overlay {
@@ -1720,6 +1765,11 @@ input:checked + .slider::before {
 .plugin-block-header:hover .pb-tokens {
     -webkit-text-fill-color: #8b8278;
 }
+.exec-cmd-label {
+    opacity: 0.6;
+    font-weight: 400;
+    margin-right: 4px;
+}
 .plugin-block-title {
     flex: 0 1 auto;
 }
@@ -1879,5 +1929,129 @@ input:checked + .slider::before {
     animation: none;
     opacity: 1;
     background: #ccc;
+}
+
+/* ========== 提问底层面板 ========== */
+.ask-overlay {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 999;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    pointer-events: none;
+    opacity: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: opacity 0.25s ease;
+}
+.ask-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+.ask-panel {
+    background: var(--card-bg, #fff);
+    border-radius: 20px 20px 0 0;
+    padding: 12px 20px 28px;
+    width: var(--input-width, 50vw);
+    min-width: var(--input-min-width, 480px);
+    max-width: min(90vw, 720px);
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.94, 0.6, 1);
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.12);
+}
+.ask-overlay.active .ask-panel {
+    transform: translateY(0);
+}
+.ask-panel::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border, #ddd);
+    margin: 0 auto 16px;
+    opacity: 0.5;
+}
+.ask-panel-question {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text, #1a1a1a);
+    margin-bottom: 18px;
+    line-height: 1.5;
+    padding: 0 4px;
+}
+.ask-panel-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 4px;
+}
+.ask-option-btn {
+    display: block;
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border, #e8e8e8);
+    background: var(--card-bg, #fff);
+    color: var(--text, #333);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+.ask-option-btn:hover {
+    background: #f5f5f5;
+    border-color: #d0d0d0;
+}
+.ask-option-btn:active {
+    transform: scale(0.98);
+}
+.ask-option-none {
+    margin-top: 6px;
+    text-align: center;
+    font-weight: 400;
+    font-size: 13px;
+    color: #aaa;
+    border: none;
+    background: transparent;
+    padding: 10px;
+}
+.ask-option-none:hover {
+    color: #777;
+    background: transparent;
+}
+[data-theme="dark"] .ask-overlay {
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+[data-theme="dark"] .ask-panel {
+    background: #181818;
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .ask-panel::before {
+    background: #333;
+}
+[data-theme="dark"] .ask-option-btn {
+    background: #1f1f1f;
+    border-color: #2a2a2a;
+    color: #e8e8e8;
+}
+[data-theme="dark"] .ask-option-btn:hover {
+    background: #2a2a2a;
+    border-color: #444;
+}
+[data-theme="dark"] .ask-option-none {
+    color: #555;
+}
+[data-theme="dark"] .ask-option-none:hover {
+    color: #888;
 }
 

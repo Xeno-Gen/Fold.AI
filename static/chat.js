@@ -13,8 +13,14 @@
             .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
             .replace(/<shell>[\s\S]*?<\/shell>/gi, '')
             .replace(/<mem-del:[^>]+>/gi, '')
-            .replace(/<conti:994>/gi, '')
             .trim();
+    }
+
+    function autoScroll() {
+        if (isUserScrolledAway) return;
+        requestAnimationFrame(function() {
+            if (!isUserScrolledAway && chatArea) chatArea.scrollTop = chatArea.scrollHeight;
+        });
     }
 
     async function processToolCalls(responseText) {
@@ -37,7 +43,7 @@
         while ((match = shellRegex.exec(responseText)) !== null) {
             commands.push({ idx: commands.length, shell: 'shell', command: match[1].trim() });
         }
-        if (commands.length === 0) return;
+        if (commands.length === 0) return false;
         // Stop all streaming command timers since we're about to execute for real
         for (var bid in pluginBlockTimers) {
             if (pluginBlockTimers[bid] && pluginBlockTimers[bid].type === 'cmd') pluginBlockTimers[bid].done = true;
@@ -86,11 +92,11 @@
                     var rawOut = d.stdout || d.stderr || '';
                     var out = rawOut.trim();
                     resultBody = (rawOut ? (out || rawOut) : _('noOutput')) + '\n' + _('exitCode') + d.exitCode;
-                    resultTitle = '命令结果: ' + cmd.shell + '> ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
+                    resultTitle = '命令结果: ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
                     sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 } else {
                     var errText = await res.text();
-                    resultTitle = '命令失败: ' + cmd.shell + '> ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
+                    resultTitle = '命令失败: ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
                     resultBody = errText;
                     sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 }
@@ -107,7 +113,7 @@
                 chatArea.scrollTop = chatArea.scrollHeight;
             } catch (e) {
                 var resultBody = e.message;
-                var resultTitle = '命令异常: ' + cmd.shell + '> ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
+                var resultTitle = '命令异常: ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
                 var sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 var idx = chats[currentChat].indexOf(execMsg);
                 if (idx !== -1) chats[currentChat][idx] = sysMsg;
@@ -123,12 +129,14 @@
             }
         }
         saveChatToBackend();
+        return commands.length > 0;
     }
 
     async function processMemoryCalls(responseText) {
         // Parse <mem:key>content</mem:key> tags
         var memRegex = /<mem:([^>]+)>([\s\S]*?)<\/mem:\1>/gi;
         var memDelRegex = /<mem-del:([^>]+)>/gi;
+        var anyMemOp = false;
         var match;
         while ((match = memRegex.exec(responseText)) !== null) {
             var key = match[1].trim();
@@ -141,9 +149,25 @@
                     body: JSON.stringify({ content: content })
                 });
                 if (res.ok) {
-                    var msg = { role: 'tool', content: _('memSaved') + key + ']', images: [], _isExec: true };
+                    var matchedBid = null;
+                    for (var bid in pluginBlockTimers) {
+                        var t = pluginBlockTimers[bid];
+                        if (t && t.type === 'mem' && t.key === key.trim()) { matchedBid = bid; break; }
+                    }
+                    var resultTitle = '记忆已保存: ' + key.trim();
+                    var resultBody = content;
+                    var msg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                     chats[currentChat].push(msg);
-                    addMessage(msg.content, 'tool', [], null, msg);
+                    if (matchedBid) {
+                        var target = document.getElementById(matchedBid);
+                        if (target) {
+                            updateCmdBlock(target, resultTitle, resultBody);
+                        }
+                    } else {
+                        chatAreaInner.appendChild(createCmdBlock(resultTitle, resultBody));
+                        if (emptyHint) emptyHint.style.display = 'none';
+                    }
+                    anyMemOp = true;
                 }
             } catch (e) {}
         }
@@ -153,9 +177,25 @@
             try {
                 var res = await fetch('/api/plugin/Memory/memory/' + encodeURIComponent(key), { method: 'DELETE' });
                 if (res.ok) {
-                    var msg = { role: 'tool', content: _('memDeleted') + key + ']', images: [], _isExec: true };
+                    var matchedBid = null;
+                    for (var bid in pluginBlockTimers) {
+                        var t = pluginBlockTimers[bid];
+                        if (t && t.type === 'mem' && t.key === key.trim()) { matchedBid = bid; break; }
+                    }
+                    var resultTitle = '记忆已删除: ' + key.trim();
+                    var resultBody = '';
+                    var msg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                     chats[currentChat].push(msg);
-                    addMessage(msg.content, 'tool', [], null, msg);
+                    if (matchedBid) {
+                        var target = document.getElementById(matchedBid);
+                        if (target) {
+                            updateCmdBlock(target, resultTitle, resultBody);
+                        }
+                    } else {
+                        chatAreaInner.appendChild(createCmdBlock(resultTitle, resultBody));
+                        if (emptyHint) emptyHint.style.display = 'none';
+                    }
+                    anyMemOp = true;
                 }
             } catch (e) {}
         }
@@ -164,6 +204,7 @@
         memRegex.lastIndex = 0;
         memDelRegex.lastIndex = 0;
         await refreshMemories();
+        return anyMemOp;
     }
 
     // 从 pluginPrompts 模板构建工具提示词
@@ -172,30 +213,13 @@
         if (agentEnabled && pluginPrompts.agent) {
             parts.push(pluginPrompts.agent);
         }
-        if ((commandExecEnabled || memoryEnabled)) {
+        if ((commandExecEnabled || memoryEnabled || askEnabled)) {
             var toolContent = '';
-            // Use tools.md if available, otherwise inline fallback
-            if (pluginPrompts.tools) {
-                toolContent = pluginPrompts.tools;
-            } else {
-                toolContent = '你可以在回复中直接使用单行标签调用以下功能:\n';
-                if (commandExecEnabled) {
-                    toolContent += '\n- 执行PowerShell: <powershell>命令内容</powershell> 或 <power>命令内容</power>\n- 执行CMD: <cmd>命令内容</cmd>\n- 执行Shell(bash): <shell>命令内容</shell>';
-                }
-                if (memoryEnabled) {
-                    toolContent += '\n- 保存记忆: <mem:键名>内容</mem:键名>\n- 删除记忆: <mem-del:键名>';
-                }
-                toolContent += '\n标签不换行，直接嵌在句子中。';
-            }
+            toolContent = pluginPrompts.tools || '';
             parts.push(toolContent.trim());
 
-            // Append dynamic content (memories, work dir) after the static md
+            // Append dynamic content (work dir) after the static md
             var dynamicParts = [];
-            if (memoryEnabled && cachedMemories.length > 0) {
-                var memList = '\n[已有记忆]';
-                cachedMemories.forEach(function(m, i) { memList += '\n' + (i + 1) + '. ' + m.key + ': ' + (m.content || ''); });
-                dynamicParts.push(memList);
-            }
             if (commandExecEnabled) {
                 var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
                 dynamicParts.push('\n默认工作目录为 ' + wd + '，所有命令默认在此目录执行，记住在查看文件时不能虚构文件夹，最佳做法是使用查阅目录的命令');
@@ -481,6 +505,14 @@
                         iterMsgs.push({ role: 'user', content: '[视频帧: ' + vf.fileName + ']', images: [vf.content] });
                     });
                 }
+                // 记忆作为独立 system 消息，排在所有 system 消息之后、用户消息之前
+                if (memoryEnabled && cachedMemories.length > 0) {
+                    var memContent = '[已有记忆]\n';
+                    cachedMemories.forEach(function(m, i) { memContent += '\n' + (i + 1) + '. ' + m.key + ': ' + (m.content || ''); });
+                    var sysCount = 0;
+                    while (sysCount < iterMsgs.length && iterMsgs[sysCount].role === 'system') sysCount++;
+                    iterMsgs.splice(sysCount, 0, { role: 'system', content: memContent.trim(), images: [] });
+                }
                 var callResult = await callAPI(iterMsgs);
                 apiRequest = callResult.apiRequest || apiRequest;
                 fullContent = '';
@@ -531,7 +563,7 @@
                                         if (!thinkStartTime) { thinkStartTime = Date.now(); }
                                         fullReasoning += String(delta.reasoning_content);
                                         reasoningDiv.innerHTML = createThinkBlock(fullReasoning, { isThinking: true });
-                                        if (!isUserScrolledAway) chatArea.scrollTop = chatArea.scrollHeight;
+                                        autoScroll();
                                     }
                                     if (delta.content != null) {
                                         fullContent += String(delta.content);
@@ -540,14 +572,14 @@
                                             if (typeof streamAnimation !== 'undefined' && streamAnimation === 'fadein' && !contentDiv.classList.contains('stream-fadein')) contentDiv.classList.add('stream-fadein');
                                             updatePluginTimers();
                                             restoreExpandedBlocks();
-                                            if (!isUserScrolledAway) chatArea.scrollTop = chatArea.scrollHeight;
+                                            autoScroll();
                                         }
                                     }
                                 }
                             } catch (e) {}
                         }
                     }
-                    if (!isUserScrolledAway) chatArea.scrollTop = chatArea.scrollHeight;
+                    autoScroll();
                 }
                 if (buffer.trim().startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
                     try {
@@ -566,28 +598,22 @@
                 chats[currentChat].push(iterAssistantMsg);
                 saveChatToBackend();
 
-                // Process tool calls from this iteration (before agent break so non-agent mode also processes)
+                // Process tool calls from this iteration
+                var hadCommand = false;
                 if (commandExecEnabled) {
-                    try { await processToolCalls(fullContent); } catch (e) { console.error('[工具调用错误]', e); }
+                    try { hadCommand = await processToolCalls(fullContent); } catch (e) { console.error('[工具调用错误]', e); }
                 }
+                var hadMemoryOp = false;
                 if (memoryEnabled) {
-                    try { await processMemoryCalls(fullContent); } catch (e) { console.error('[记忆调用错误]', e); }
+                    try { hadMemoryOp = await processMemoryCalls(fullContent); } catch (e) { console.error('[记忆调用错误]', e); }
                 }
 
                 if (!agentEnabled) break;
 
-                // Check conti:994 on any line
-                var shouldContinue = false;
-                if (agentIter < maxAgentIter - 1) {
-                    var contentLines = fullContent.split('\n');
-                    for (var cl = 0; cl < contentLines.length; cl++) {
-                        if (contentLines[cl].indexOf('<conti:994>') !== -1) {
-                            shouldContinue = true;
-                            break;
-                        }
-                    }
-                }
-                console.log('[Agent] 迭代 ' + (agentIter + 1) + ' 完成, 长度: ' + fullContent.length + ', <conti:994>=' + shouldContinue);
+                // Auto-continue if any command or memory operation was executed
+                var shouldContinue = hadCommand || hadMemoryOp;
+                if (agentIter >= maxAgentIter - 1) shouldContinue = false;
+                console.log('[Agent] 迭代 ' + (agentIter + 1) + ' 完成, 长度: ' + fullContent.length + ', 有命令=' + hadCommand + ', 有记忆=' + hadMemoryOp + ', 继续=' + shouldContinue);
 
                 if (!shouldContinue) break;
 
@@ -608,6 +634,7 @@
             bubble.replaceWith(newBubble);
             updateHistoryTitle();
             saveChatToBackend();
+            if (typeof showAskPopup === 'function' && _pendingAsk) showAskPopup();
         } catch (e) {
             if (e && (e.name === 'AbortError' || e.code === 'ERR_CANCELED')) {
                 var md = bubble.querySelector('.markdown-body') || bubble;

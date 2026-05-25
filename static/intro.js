@@ -51,7 +51,7 @@ window.showToast = function(msg) {
 
     var isChatActive = false, deepThinkEnabled = false, currentThinkMode = 'fast', cothinkEnabled = true;
     var cachedThinkPrompt = '';
-    var commandExecEnabled = false, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true;
+    var commandExecEnabled = false, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true, askEnabled = true;
     var cachedMemories = [];
     var chats = [[]], chatTitles = [_('currentChatTitle')], chatTokens = [''], currentChat = 0;
     var activeFiles = { initial: [], chat: [] };
@@ -131,6 +131,7 @@ window.showToast = function(msg) {
                 if (s.streamEnabled !== undefined) streamEnabled = s.streamEnabled;
                 if (s.cothinkEnabled !== undefined) cothinkEnabled = s.cothinkEnabled;
                 if (s.includeReasoning !== undefined) includeReasoning = s.includeReasoning;
+                if (s.askEnabled !== undefined) askEnabled = s.askEnabled;
                 if (s.maxContextTokens !== undefined) maxContextTokens = s.maxContextTokens;
             }
         } catch (e) {}
@@ -142,7 +143,7 @@ window.showToast = function(msg) {
 
     function saveSettingsToLocal() {
         try {
-            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation }));
+            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled }));
         } catch (e) {}
     }
 
@@ -358,7 +359,7 @@ window.showToast = function(msg) {
     var settingsLastTab = localStorage.getItem('fold_settings_tab') || 'preferences';
     var settingsTabMeta = [
         { id: 'preferences', label: _('preferences'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
-        { id: 'parameters', label: _('parameters'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' },
+        { id: 'model', label: _('model'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' },
         { id: 'plugins', label: _('plugins'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
         { id: 'memories', label: _('memories'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>' },
         { id: 'usage', label: _('usage'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' },
@@ -403,7 +404,7 @@ window.showToast = function(msg) {
             });
         }
         if (tab === 'preferences') renderPreferencesTab();
-        else if (tab === 'parameters') renderParametersTab();
+        else if (tab === 'model') renderModelTab();
         else if (tab === 'plugins') renderPluginsTab();
         else if (tab === 'memories') renderMemoriesTab();
         else if (tab === 'usage') { loadUsageStats().then(function() { renderUsageTab(); }); }
@@ -418,7 +419,7 @@ window.showToast = function(msg) {
             '<button class="think-mode-option' + (currentTheme === 'light' ? ' active' : '') + '" data-theme="light"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('light') + '</span></button>' +
             '<button class="think-mode-option' + (currentTheme === 'dark' ? ' active' : '') + '" data-theme="dark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('dark') + '</span></button>' +
             '<button class="think-mode-option' + (currentTheme === 'system' ? ' active' : '') + '" data-theme="system"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>' + _('system') + '</span></button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' + _('chatFont') + '</span><select id="settingsFontSelect" style="padding:5px 10px;border-radius:6px;border:0.5px solid #ddd;font-size:13px;background:#fff;font-family:inherit;"><option value="">' + _('defaultFont') + '</option><option value="PingFang SC, Microsoft YaHei, sans-serif">PingFang</option><option value="Noto Serif SC, serif">Noto Serif</option><option value="Songti SC, serif">宋体</option><option value="Inter, sans-serif">Inter</option><option value="quote-cjk-patch, PingFang SC, Microsoft YaHei, sans-serif">quote-cjk-patch</option><option value="Cascadia Code, JetBrains Mono, Fira Code, SF Mono, Monaco, Consolas, monospace">Monospace</option></select></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' + _('chatFont') + '</span><select id="settingsFontSelect" class="settings-font-select"><option value="">' + _('defaultFont') + '</option><option value="PingFang SC, Microsoft YaHei, sans-serif">PingFang</option><option value="Noto Serif SC, serif">Noto Serif</option><option value="Songti SC, serif">宋体</option><option value="Inter, sans-serif">Inter</option><option value="quote-cjk-patch, PingFang SC, Microsoft YaHei, sans-serif">quote-cjk-patch</option><option value="Cascadia Code, JetBrains Mono, Fira Code, SF Mono, Monaco, Consolas, monospace">Monospace</option></select></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5h16v2M4 11h16M4 15h16M4 19h16"/></svg>' + (_('fontSize') || '字号') + '</span><div class="think-mode-selector" id="settingsFontSizeSelector" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (chatFontSize === 13 ? ' active' : '') + '" data-size="13">13</button>' +
             '<button class="think-mode-option' + (!chatFontSize || chatFontSize === 15 ? ' active' : '') + '" data-size="15">15</button>' +
@@ -434,14 +435,7 @@ window.showToast = function(msg) {
             '<div class="settings-section"><div class="settings-section-title">' + (_('animation') || '动画') + '</div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + (_('streamFadeIn') || '流式渐显') + '</span><div class="think-mode-selector" id="settingsStreamAnimToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (streamAnimation === 'fadein' ? ' active' : '') + '" data-value="fadein">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (streamAnimation !== 'fadein' ? ' active' : '') + '" data-value="none">' + _('off') + '</button></div></div></div>' +
-            '<div class="settings-section"><div class="settings-section-title">' + (_('model') || '模型') + '</div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' + '流式输出' + '</span><div class="think-mode-selector" id="settingsStreamToggle" style="display:inline-flex;">' +
-            '<button class="think-mode-option' + (streamEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!streamEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('includeReasoning') || '上下文并入深度思考') + '</span><div class="think-mode-selector" id="settingsIncludeReasoningToggle" style="display:inline-flex;">' +
-            '<button class="think-mode-option' + (includeReasoning ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!includeReasoning ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
+            '<button class="think-mode-option' + (streamAnimation !== 'fadein' ? ' active' : '') + '" data-value="none">' + _('off') + '</button></div></div></div>';
         // 字体
         var fontSelect = document.getElementById('settingsFontSelect');
         if (fontSelect) {
@@ -492,6 +486,27 @@ window.showToast = function(msg) {
                 settingsPanelContent.querySelectorAll('#settingsStreamAnimToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
+    }
+
+    function renderModelTab() {
+        if (!settingsPanelContent) return;
+        var ctxVal = (typeof maxContextTokens !== 'undefined' ? maxContextTokens : 1000000);
+        var ctxStr = ctxVal >= 1000000 ? (ctxVal / 1000000).toFixed(0) + 'M' : (ctxVal / 1000) + 'K';
+        settingsPanelContent.innerHTML =
+            '<div class="settings-section"><div class="settings-section-title">' + (_('parameters') || '参数') + '</div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' + (_('totalCapacity') || '上下文容量') + '</span><span style="font-size:13px;color:#888;">' + ctxStr + ' token</span></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' + (_('thinkMode') || '思考模式') + '</span><span style="font-size:13px;color:#888;">' + (currentThinkMode === 'fast' ? (_('fast') || '快速') + ' — low' : currentThinkMode === 'think' ? (_('think') || '思考') + ' — medium' : currentThinkMode === 'deep' ? (_('deep') || '沉思') + ' — high' : (_('meditate') || '静思') + ' — max') + '</span></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + (_('model') || '模型') + '</span><span style="font-size:13px;color:#888;font-weight:500;">' + escapeHtml(currentModel || '—') + '</span></div></div>' +
+            '<div class="settings-section"><div class="settings-section-title">' + (_('model') || '模型') + ' ' + (_('settings') || '设置') + '</div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' + '流式输出' + '</span><div class="think-mode-selector" id="settingsStreamToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (streamEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (!streamEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('includeReasoning') || '上下文并入深度思考') + '</span><div class="think-mode-selector" id="settingsIncludeReasoningToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (includeReasoning ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (!includeReasoning ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + '模型提问' + '</span><div class="think-mode-selector" id="settingsAskToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (askEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (!askEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
         settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(o) {
             o.onclick = function() {
                 streamEnabled = o.dataset.value === 'true';
@@ -506,15 +521,13 @@ window.showToast = function(msg) {
                 settingsPanelContent.querySelectorAll('#settingsIncludeReasoningToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
-    }
-
-    function renderParametersTab() {
-        if (!settingsPanelContent) return;
-        var ctxVal = (typeof maxContextTokens !== 'undefined' ? maxContextTokens : 1000000);
-        var ctxStr = ctxVal >= 1000000 ? (ctxVal / 1000000).toFixed(0) + 'M' : (ctxVal / 1000) + 'K';
-        settingsPanelContent.innerHTML = '<div class="settings-section"><div class="settings-section-title">' + (_('parameters') || '参数') + '</div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' + (_('totalCapacity') || '上下文容量') + '</span><span style="font-size:13px;color:#888;">' + ctxStr + ' token</span></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' + (_('thinkMode') || '思考模式') + '</span><span style="font-size:13px;color:#888;">' + (currentThinkMode === 'fast' ? (_('fast') || '快速') + ' — low' : currentThinkMode === 'think' ? (_('think') || '思考') + ' — medium' : currentThinkMode === 'deep' ? (_('deep') || '沉思') + ' — high' : (_('meditate') || '静思') + ' — max') + '</span></div></div>';
+        settingsPanelContent.querySelectorAll('#settingsAskToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                askEnabled = o.dataset.value === 'true';
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsAskToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
     }
 
     function renderPluginsTab() {
@@ -693,20 +706,65 @@ window.showToast = function(msg) {
         settingsPanelContent.innerHTML = html;
     }
 
+    function compareVersions(a, b) {
+        var pa = a.replace(/^v/i, '').split('.');
+        var pb = b.replace(/^v/i, '').split('.');
+        for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+            var na = parseInt(pa[i]) || 0;
+            var nb = parseInt(pb[i]) || 0;
+            if (na > nb) return 1;
+            if (na < nb) return -1;
+        }
+        return 0;
+    }
+
     function renderVersionTab() {
         if (!settingsPanelContent) return;
         var verText = 'Fold.AI';
+        var localVer = '';
         // 尝试直接从 ver.json 加载版本
         (async function() {
-            try { var r = await fetch('/com/ver.json'); if (r.ok) { var d = await r.json(); verText = _('version') + ' ' + (d.stage || '') + ' ' + (d.ver || '') + ' · Fold.AI'; } } catch (e) {}
+            try { var r = await fetch('/com/ver.json'); if (r.ok) { var d = await r.json(); localVer = (d.ver || '').replace(/^v/i, ''); verText = _('version') + ' ' + (d.stage || '') + ' ' + (d.ver || '') + ' · Fold.AI'; } } catch (e) {}
         })().then(function() {
             var el = settingsPanelContent.querySelector('.settings-version-text');
             if (el) el.textContent = verText;
         });
         settingsPanelContent.innerHTML = '<div class="settings-section"><div class="settings-section-title">' + _('version') + '</div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="settings-version-text">' + escapeHtml(verText) + '</span></span></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="settings-version-text">' + escapeHtml(verText) + '</span></span>' +
+            '<span id="checkUpdateBtn" class="settings-update-btn">检查更新</span></div>' +
             '<div class="settings-item" style="cursor:pointer;" onclick="window.open(\'https://github.com/Xeno-Gen/Fold.AI\')"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>' +
             '<div class="settings-item" style="cursor:pointer;" onclick="window.open(\'https://space.bilibili.com/1586932627\')"><span class="settings-item-label"><img src="/img/bilibili.png" width="18" height="18" style="border-radius:50%">Bilibili</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></div>';
+        // 检查更新按钮
+        document.getElementById('checkUpdateBtn').onclick = async function() {
+            var btn = this;
+            btn.textContent = '检查中…';
+            btn.classList.add('checking');
+            try {
+                var res = await fetch('https://raw.githubusercontent.com/Xeno-Gen/Fold.AI/main/com/ver.json');
+                if (!res.ok) throw new Error('网络错误');
+                var remote = await res.json();
+                var remoteVer = (remote.ver || '').replace(/^v/i, '');
+                // 等待本地版本加载
+                await new Promise(function(resolve) { setTimeout(resolve, 300); });
+                if (!localVer) {
+                    try { var lr = await fetch('/com/ver.json'); if (lr.ok) { var ld = await lr.json(); localVer = (ld.ver || '').replace(/^v/i, ''); } } catch (e) {}
+                }
+                var cmp = compareVersions(remoteVer, localVer);
+                if (cmp > 0) {
+                    btn.innerHTML = '去更新 ' + remoteVer + ' →';
+                    btn.className = 'settings-update-btn has-update';
+                    btn.onclick = function() { window.open('https://github.com/Xeno-Gen/Fold.AI/releases'); };
+                } else {
+                    btn.textContent = '已是最新';
+                    btn.classList.remove('checking');
+                    btn.style.pointerEvents = 'none';
+                }
+            } catch (e) {
+                btn.textContent = '检查失败';
+                btn.classList.remove('checking');
+                setTimeout(function() { btn.textContent = '检查更新'; btn.style.pointerEvents = ''; }, 3000);
+            }
+        };
     }
 
     if (sidebarSettingsBtn) sidebarSettingsBtn.onclick = openSettings;
@@ -1258,7 +1316,7 @@ window.showToast = function(msg) {
         if (role === 'ai') {
             var rendered = _renderAIContent(content);
             contentHtml = '<div class="markdown-body">' + rendered + '</div>';
-        } else if (role === 'system' && msgRef && msgRef._isExec) {
+        } else if ((role === 'system' || role === 'tool') && msgRef && msgRef._isExec) {
             // 命令执行结果使用 plugin-block 折叠样式
             var execTitle = msgRef._execTitle || '';
             if (!execTitle) {
@@ -1635,9 +1693,10 @@ window.showToast = function(msg) {
         result = result.replace(/<(?:power|powershell)>\s*([\s\S]*?)\s*<\/(?:power|powershell)>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
+            var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
                 '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
@@ -1647,9 +1706,10 @@ window.showToast = function(msg) {
         result = result.replace(/<(?:cmd|command)>\s*([\s\S]*?)\s*<\/(?:cmd|command)>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
+            var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
                 '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
@@ -1659,9 +1719,10 @@ window.showToast = function(msg) {
         result = result.replace(/<shell>\s*([\s\S]*?)\s*<\/shell>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
+            var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
                 '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
@@ -1670,7 +1731,7 @@ window.showToast = function(msg) {
         // Replace mem:key blocks
         result = result.replace(/<mem:([^>]+)>([\s\S]*?)<\/mem:\1>/gi, function(match, key, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem' };
+            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem', key: key.trim() };
             return _pluginMark('<div class="plugin-block mem-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
@@ -1684,9 +1745,10 @@ window.showToast = function(msg) {
         result = result.replace(/<(?:power|powershell)>\s*([\s\S]*)$/gi, function(match, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
+            var cmdShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
+            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
@@ -1696,9 +1758,10 @@ window.showToast = function(msg) {
         result = result.replace(/<(?:cmd|command)>\s*([\s\S]*)$/gi, function(match, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
+            var cmdShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
+            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
@@ -1708,9 +1771,10 @@ window.showToast = function(msg) {
         result = result.replace(/<shell>\s*([\s\S]*)$/gi, function(match, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
+            var cmdShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
+            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">正在执行命令</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
@@ -1719,14 +1783,34 @@ window.showToast = function(msg) {
         // mem:key 未闭合
         result = result.replace(/<mem:([^>]+)>([\s\S]*)$/gi, function(match, key, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem' };
-            return _pluginMark('<div class="plugin-block mem-block streaming" id="' + bid + '">' +
+            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem', key: key.trim() };
+            return _pluginMark('<div class="plugin-block mem-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
                 '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
                 '</div>');
+        });
+        // Replace <ask> blocks — render inline block + store for popup
+        result = result.replace(/<ask>([\s\S]*?)<\/ask>/gi, function(match, inner) {
+            var qMatch = inner.match(/<q=([^>]*)>/);
+            var question = qMatch ? qMatch[1].trim() : '';
+            var opts = [];
+            inner.replace(/<o\d=([^>]*)>/gi, function(m, val) { opts.push(val.trim()); });
+            if (question && opts.length > 0) {
+                _pendingAsk = { question: question, options: opts };
+                var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                var optPreview = opts.map(function(o) { return '<span style="display:inline-block;padding:2px 10px;margin:2px 4px 2px 0;border-radius:12px;border:1px solid var(--plugin-border,#ddd);font-size:12px;">' + escapeHtml(o) + '</span>'; }).join('');
+                return _pluginMark('<div class="plugin-block ask-block" id="' + bid + '">' +
+                    '<div class="plugin-block-header" style="cursor:default;">' +
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' +
+                    '<span class="plugin-block-title">' + escapeHtml(question) + '</span>' +
+                    '</div>' +
+                    '<div class="plugin-block-body" style="white-space:normal;padding:8px 14px;">' + optPreview + '</div>' +
+                    '</div>');
+            }
+            return '';
         });
         // Remove mem-del tags and conti:994
         result = result.replace(/<mem-del:[^>]+>/gi, '');
@@ -2020,7 +2104,8 @@ window.showToast = function(msg) {
         { name: 'context', desc: _('slashContext') || '显示当前上下文占用情况' },
         { name: 'clear', desc: _('slashClear') || '清空当前对话输出' },
         { name: 'del context', desc: _('slashDelContext') || '删除全部历史对话' },
-        { name: 'setctx', desc: _('slashSetCtx') || '设置上下文容量，如 /setctx 32k、/setctx 1m' }
+        { name: 'setctx', desc: _('slashSetCtx') || '设置上下文容量，如 /setctx 32k、/setctx 1m' },
+        { name: 'remem', desc: _('slashRemember') || '选择消息保存为记忆，如 /remem 3 键名' }
     ];
     var slashPopup = null;
     var slashActiveIndex = -1;
@@ -2038,6 +2123,7 @@ window.showToast = function(msg) {
         lastScrollTop = chatArea.scrollTop;
     });
     var userExpandedBodies = {};
+    var _pendingAsk = null;
     chatArea.addEventListener('click', function(e) {
         var collapsed = e.target.closest('.msg-collapsed');
         if (collapsed) collapsed.classList.toggle('expanded');
@@ -2065,6 +2151,36 @@ window.showToast = function(msg) {
                 allBlocks[i].classList.remove('collapsed');
             }
         }
+    }
+
+    function showAskPopup() {
+        if (!_pendingAsk) return;
+        var data = _pendingAsk;
+        _pendingAsk = null;
+        // Remove existing overlay if any
+        var existing = document.querySelector('.ask-overlay');
+        if (existing) existing.remove();
+        var overlay = document.createElement('div');
+        overlay.className = 'ask-overlay';
+        var optionsHtml = data.options.map(function(o) {
+            return '<button class="ask-option-btn" data-value="' + escapeHtml(o) + '">' + escapeHtml(o) + '</button>';
+        }).join('');
+        overlay.innerHTML = '<div class="ask-panel"><div class="ask-panel-question">' + escapeHtml(data.question) + '</div><div class="ask-panel-options">' + optionsHtml + '<button class="ask-option-btn ask-option-none">什么都不选</button></div></div>';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function() { overlay.classList.add('active'); });
+        overlay.querySelectorAll('.ask-option-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var answer = this.dataset.value;
+                overlay.classList.remove('active');
+                setTimeout(function() { overlay.remove(); }, 200);
+                if (!answer) return; // "什么都不选" has no data-value
+                // Add answer as user message and send
+                var ta = isChatActive ? chatText : initText;
+                ta.value = answer;
+                updateSendBtn();
+                if (!streaming) sendMessage(false);
+            });
+        });
     }
 
     async function getIdentity() {
@@ -2098,7 +2214,7 @@ window.showToast = function(msg) {
             var popup = document.createElement('div');
             popup.className = 'deep-think-popup';
             popup._triggerBtn = triggerBtn;
-            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
+            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>模型提问</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
             document.body.appendChild(popup);
             var rect = triggerBtn.getBoundingClientRect();
             popup.style.left = (rect.left + rect.width / 2 - 10) + 'px';
@@ -2106,7 +2222,7 @@ window.showToast = function(msg) {
             popup.style.transformOrigin = 'bottom center';
             requestAnimationFrame(function() {
                 popup.classList.add('active');
-                requestAnimationFrame(function() { popup.style.left = (rect.left + rect.width / 2 - popup.offsetWidth / 2) + 'px'; popup.style.top = (rect.top - popup.offsetHeight - 8) + 'px'; });
+                requestAnimationFrame(function() { var pl = rect.left + rect.width / 2 - popup.offsetWidth / 2; pl = Math.max(6, Math.min(pl, window.innerWidth - popup.offsetWidth - 6)); popup.style.left = pl + 'px'; popup.style.top = (rect.top - popup.offsetHeight - 8) + 'px'; });
             });
             popup.querySelectorAll('.think-mode-option').forEach(function(op) {
                 op.addEventListener('click', function() {
@@ -2146,6 +2262,11 @@ window.showToast = function(msg) {
                         compressOldExecutions = value === 'on';
                         popup.querySelectorAll('.tool-chain-option[data-tool="compressExec"]').forEach(function(o) { o.classList.toggle('active', o === op); });
                         if (window.CommandExecutionPlugin) window.CommandExecutionPlugin.setCompressOldExecutions(compressOldExecutions);
+                        saveSettingsToLocal();
+                    }
+                    if (tool === 'ask') {
+                        askEnabled = value === 'on';
+                        popup.querySelectorAll('.tool-chain-option[data-tool="ask"]').forEach(function(o) { o.classList.toggle('active', o === op); });
                         saveSettingsToLocal();
                     }
                 });

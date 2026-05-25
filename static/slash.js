@@ -41,18 +41,24 @@
     function showSlashPopup(ta) {
         initSlashPopup();
         var val = ta.value;
-        if (!val.startsWith('/') || val.length < 2) {
+        if (!val.startsWith('/')) {
             hideSlashPopup(ta);
             return;
         }
         var query = val.substring(1);
         var queryLower = query.toLowerCase();
-        // Match: command name starts with query's first word, or first word starts with command name
-        var firstWord = queryLower.split(' ')[0];
-        var matches = slashCommands.filter(function(c) {
-            var cmdLower = c.name.toLowerCase();
-            return cmdLower.indexOf(firstWord) === 0;
-        });
+        var matches;
+        if (query.length === 0) {
+            // Just "/" — show all commands
+            matches = slashCommands.slice();
+        } else {
+            // Match: command name starts with query's first word, or first word starts with command name
+            var firstWord = queryLower.split(' ')[0];
+            matches = slashCommands.filter(function(c) {
+                var cmdLower = c.name.toLowerCase();
+                return cmdLower.indexOf(firstWord) === 0;
+            });
+        }
         matches.sort(function(a, b) {
             var aPre = a.name.indexOf(firstWord) === 0 ? 0 : 1;
             var bPre = b.name.indexOf(firstWord) === 0 ? 0 : 1;
@@ -149,6 +155,7 @@
             case 'clear': renderSlashClear(); break;
             case 'del context': renderSlashDelContext(); break;
             case 'setctx': renderSlashSetCtx(fullText); break;
+            case 'remem': renderSlashRemember(fullText); break;
         }
     }
 
@@ -306,6 +313,101 @@
         addSlashResult((_('slashSetCtx') || '设置容量'), '<p style="color:#6b8a5e;font-weight:500;">' + (_('ctxSetDone') || '已设置上下文容量') + ': ' + maxContextTokens.toLocaleString() + ' tokens</p>');
     }
 
+    function renderSlashRemember(fullText) {
+        var msgs = chats[currentChat] || [];
+        var hasContent = msgs.some(function(m) { return m.content && m.content.replace(/<[^>]+>/g, '').trim(); });
+        if (!hasContent) {
+            addSlashResult((_('slashRemember') || '保存记忆'), '<p style="color:#9b968b;">' + (_('emptyChat') || '空对话') + '</p>');
+            return;
+        }
+        // Build message list with selection UI
+        var keyName = '';
+        var selected = {};
+        var listHtml = '<div style="margin-bottom:12px;"><input id="rmKeyInput" placeholder="' + (_('memoryKeyPlaceholder') || '记忆键名') + '" style="width:100%;padding:9px 12px;border:1px solid #e0e0e0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;"></div>';
+        listHtml += '<div style="margin-bottom:8px;font-size:12px;color:#888;">' + (_('chatMessages') || '点击选择消息') + ':</div>';
+        listHtml += '<div style="max-height:360px;overflow-y:auto;margin-bottom:12px;">';
+        msgs.forEach(function(m, i) {
+            if (!m.content) return;
+            var text = m.content.replace(/<[^>]+>/g, '').trim();
+            if (!text) return;
+            var preview = text.substring(0, 200);
+            listHtml += '<div class="rm-msg-item" data-idx="' + i + '" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .15s;border:1px solid transparent;margin-bottom:4px;">' +
+                '<span style="font-size:12px;color:#555;line-height:1.5;word-break:break-word;">' + escapeHtml(preview) + '</span></div>';
+        });
+        listHtml += '</div>';
+        listHtml += '<div style="display:flex;gap:8px;"><button id="rmSaveBtn" class="btn bp" style="flex:1;padding:9px 16px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;border:none;font-weight:500;background:#1a1a1a;color:#fff;opacity:.25;cursor:not-allowed;" disabled>' + (_('save') || '保存') + '</button>' +
+            '<button id="rmCancelBtn" class="btn bg" style="padding:9px 16px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;border:1px solid #e0e0e0;background:transparent;color:#888;">' + (_('cancel') || '取消') + '</button></div>';
+
+        var body = addSlashResult((_('slashRemember') || '保存记忆'), listHtml);
+        if (!body) return;
+
+        // Attach event handlers
+        body.querySelectorAll('.rm-msg-item').forEach(function(el) {
+            el.onclick = function() {
+                var idx = this.dataset.idx;
+                if (selected[idx]) {
+                    delete selected[idx];
+                    this.style.background = '';
+                    this.style.borderColor = 'transparent';
+                } else {
+                    selected[idx] = true;
+                    this.style.background = '#dce8f5';
+                    this.style.borderColor = '#6b8a5e';
+                }
+                updateSaveBtn();
+            };
+        });
+        function updateSaveBtn() {
+            var key = body.querySelector('#rmKeyInput').value.trim();
+            var hasSel = Object.keys(selected).length > 0;
+            var btn = body.querySelector('#rmSaveBtn');
+            if (key && hasSel) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '.25';
+                btn.style.cursor = 'not-allowed';
+            }
+        }
+        body.querySelector('#rmKeyInput').oninput = updateSaveBtn;
+        body.querySelector('#rmCancelBtn').onclick = function() {
+            var card = this.closest('.slash-result-card');
+            if (card) { card.closest('.slash-result-overlay').classList.remove('active'); setTimeout(function() { if (card.closest('.slash-result-overlay')) card.closest('.slash-result-overlay').remove(); }, 250); }
+        };
+        body.querySelector('#rmSaveBtn').onclick = function() {
+            var key = body.querySelector('#rmKeyInput').value.trim();
+            if (!key || Object.keys(selected).length === 0) return;
+            this.disabled = true;
+            this.textContent = (_('saving') || '保存中...');
+            // Collect all selected content
+            var contentParts = [];
+            var indices = Object.keys(selected).map(Number).sort(function(a,b){return a-b;});
+            indices.forEach(function(i) {
+                var text = msgs[i].content.replace(/<[^>]+>/g, '').trim();
+                if (text) contentParts.push(text);
+            });
+            var combined = contentParts.join('\n\n---\n\n');
+            // Save via API
+            fetch('/api/plugin/Memory/memory/' + encodeURIComponent(key), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: combined })
+            }).then(function(r) {
+                if (r.ok) {
+                    body.innerHTML = '<p style="color:#6b8a5e;font-weight:500;">[' + escapeHtml(key) + '] ' + (_('saved') || '已保存') + '</p>' +
+                        '<p style="font-size:12px;color:#888;margin-top:6px;">' + escapeHtml(combined.substring(0, 300)) + '</p>';
+                    if (typeof refreshMemories !== 'undefined') refreshMemories();
+                } else {
+                    body.innerHTML = '<p style="color:#b8554a;">' + (_('saveFailed') || '保存失败') + '</p>';
+                }
+            }).catch(function() {
+                body.innerHTML = '<p style="color:#b8554a;">' + (_('saveFailed') || '保存失败') + '</p>';
+            });
+        };
+    }
+
     function addSlashResult(title, html) {
         var overlay = document.createElement('div');
         overlay.className = 'slash-result-overlay';
@@ -331,7 +433,7 @@
 
     function handleSlashInput(ta) {
         var val = ta.value;
-        if (val.startsWith('/') && val.length >= 2) {
+        if (val.startsWith('/')) {
             showSlashPopup(ta);
         } else {
             hideSlashPopup(ta);
@@ -365,6 +467,12 @@
                 }
                 if (val === '/del context' || val.indexOf('/del context ') === 0) {
                     renderSlashDelContext();
+                    ta.value = '';
+                    updateSendBtn();
+                    return true;
+                }
+                if (val === '/remem' || val.indexOf('/remem ') === 0) {
+                    renderSlashRemember(val);
                     ta.value = '';
                     updateSendBtn();
                     return true;
