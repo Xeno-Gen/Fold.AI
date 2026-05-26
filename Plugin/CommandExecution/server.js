@@ -173,7 +173,7 @@ module.exports = function(context) {
 
     function execute(req, res) {
         const startTime = Date.now();
-        const { shell, command, timeout, workingDirectory } = req.body;
+        const { shell, command, timeout, workingDirectory, sandbox } = req.body;
 
         if (!command) {
             return res.status(400).json({ error: '缺少命令内容' });
@@ -213,6 +213,50 @@ module.exports = function(context) {
         for (const pattern of dangerousPatterns) {
             if (pattern.test(command)) {
                 return res.status(403).json({ error: '危险命令被拦截' });
+            }
+        }
+
+        if (sandbox !== false) {
+            // === 工作目录沙箱：阻止路径穿越 ===
+            const workDirResolved = path.resolve(workDir);
+            const workDirLower = workDirResolved.toLowerCase();
+            const cmdLower = command.toLowerCase();
+
+            function isPathOutsideWorkDir(absPath) {
+                try {
+                    const resolved = path.resolve(absPath).toLowerCase();
+                    return resolved !== workDirLower && !resolved.startsWith(workDirLower + path.sep) && !resolved.startsWith(workDirLower + '/');
+                } catch (e) { return true; }
+            }
+
+            const pathEscapePatterns = [
+                /\b(?:cd|chdir)\s+\.\.[\\/]/i,
+                /\b(?:cd|chdir)\s+[\\/](?:\s|$|[&|;])/i,
+                /\b(?:set-location|sl|pushd|push-location)\s+\.\.[\\/]/i,
+                /[\s(]\.\.[\\/]/,
+                /\\\\[^\\]+\\/i,
+                /\breg\s+(?:add|delete|copy|save|restore)\s+/i,
+                /\breg\.exe\s+(?:add|delete|copy|save|restore)\s+/i,
+            ];
+
+            for (const pattern of pathEscapePatterns) {
+                if (pattern.test(command)) {
+                    context.logger.warn('[sandbox] blocked path escape: ' + command.substring(0, 120));
+                    return res.status(403).json({ error: '安全策略拦截：命令试图访问工作目录外的路径' });
+                }
+            }
+
+            const driveLetterRegex = /[A-Za-z]:\\/g;
+            let pathMatch;
+            while ((pathMatch = driveLetterRegex.exec(command)) !== null) {
+                const idx = pathMatch.index;
+                const rest = command.substring(idx);
+                const endIdx = rest.search(/[\s"'&|;<>()]/);
+                const pathCandidate = (endIdx === -1 ? rest : rest.substring(0, endIdx)).trim();
+                if (pathCandidate && isPathOutsideWorkDir(pathCandidate)) {
+                    context.logger.warn('[sandbox] blocked absolute path outside workDir: ' + pathCandidate);
+                    return res.status(403).json({ error: '安全策略拦截：命令包含工作目录外的绝对路径' });
+                }
             }
         }
 

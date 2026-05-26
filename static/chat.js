@@ -19,7 +19,12 @@
     function autoScroll() {
         if (isUserScrolledAway) return;
         requestAnimationFrame(function() {
-            if (!isUserScrolledAway && chatArea) chatArea.scrollTop = chatArea.scrollHeight;
+            if (!isUserScrolledAway && chatArea) {
+                var orig = chatArea.style.scrollBehavior;
+                chatArea.style.scrollBehavior = 'auto';
+                chatArea.scrollTop = chatArea.scrollHeight;
+                chatArea.style.scrollBehavior = orig;
+            }
         });
     }
 
@@ -84,7 +89,7 @@
             chats[currentChat].push(execMsg);
             try {
                 var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir;
-                var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir }) });
+                var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true }) });
                 var sysMsg;
                 var resultTitle, resultBody;
                 if (res.ok) {
@@ -296,7 +301,7 @@
         return { json: json, apiRequest: payload };
     }
 
-    async function sendMessage(isRegenerate) {
+    async function sendMessage(isRegenerate, targetMsgRef, targetBubble) {
         if (streaming && !isRegenerate) return;
         if (!currentModel) { showToast(_('selectModel')); return; }
         if (typeof _initReady !== 'undefined' && _initReady) await _initReady;
@@ -391,6 +396,7 @@
                 });
             }
             ta.value = '';
+            ta.style.height = 'auto';
             activeFiles[target] = [];
             renderPreviews(isChatActive ? chatPreview : initPreview, []);
             updateSendBtn();
@@ -400,23 +406,75 @@
         isUserScrolledAway = false;
         updateSendBtn();
 
+        var pendingVersionData = null;
+
         if (isRegenerate) {
-            var lastUserIdx = -1;
-            for (var rmi = chats[currentChat].length - 1; rmi >= 0; rmi--) {
-                if (chats[currentChat][rmi].role === 'user') { lastUserIdx = rmi; break; }
+            // 找到要重新生成的消息及其前面的用户消息
+            var targetMsg = null;
+            var targetMsgIdx = -1;
+            var precedingUserIdx = -1;
+            if (targetMsgRef) {
+                targetMsgIdx = chats[currentChat].indexOf(targetMsgRef);
+                if (targetMsgIdx !== -1) {
+                    targetMsg = targetMsgRef;
+                    for (var pi = targetMsgIdx - 1; pi >= 0; pi--) {
+                        if (chats[currentChat][pi].role === 'user') { precedingUserIdx = pi; break; }
+                    }
+                }
+            } else {
+                // 向后兼容：从末尾找最后一条 AI 和其前面的用户
+                for (var rmi = chats[currentChat].length - 1; rmi >= 0; rmi--) {
+                    if (chats[currentChat][rmi].role === 'assistant') { targetMsgIdx = rmi; targetMsg = chats[currentChat][rmi]; break; }
+                }
+                for (var rmi = targetMsgIdx - 1; rmi >= 0; rmi--) {
+                    if (chats[currentChat][rmi].role === 'user') { precedingUserIdx = rmi; break; }
+                }
             }
-            if (lastUserIdx !== -1) chats[currentChat].splice(lastUserIdx + 1);
-            // Only remove AI/system bubbles after the last user bubble
-            var allBubbles = chatAreaInner.querySelectorAll('.message-bubble');
-            var foundUser = false;
-            for (var abi = allBubbles.length - 1; abi >= 0; abi--) {
-                if (allBubbles[abi].classList.contains('message-user') && !foundUser) {
-                    foundUser = true;
-                    continue;
+
+            if (targetMsg && precedingUserIdx !== -1) {
+                // 保存旧版本数据
+                pendingVersionData = {
+                    content: targetMsg.content,
+                    reasoning: targetMsg.reasoning || null,
+                    versions: (targetMsg._versions || []).slice()
+                };
+                console.log('[版本] 重新生成 idx=' + targetMsgIdx + ' 前用户=' + precedingUserIdx);
+
+                // 将后续消息保存为分支数据，然后截断
+                var branchMsgs = chats[currentChat].splice(precedingUserIdx + 1);
+                // branchMsgs 包含目标 AI 及其后的所有消息
+                // 初始化分支存储
+                if (!chatBranches[currentChat]) chatBranches[currentChat] = [];
+                chatBranches[currentChat].push({
+                    fromMsgIdx: precedingUserIdx + 1,
+                    messages: branchMsgs,
+                    label: '分支 ' + (chatBranches[currentChat].length + 1),
+                    createdAt: Date.now()
+                });
+                if (typeof saveBranches === 'function') saveBranches();
+
+                // 移除 DOM 气泡：从目标 AI 开始到末尾
+                var allBubbles = chatAreaInner.querySelectorAll('.message-bubble');
+                var targetDomIdx = -1;
+                for (var abi = 0; abi < allBubbles.length; abi++) {
+                    if (targetBubble && allBubbles[abi] === targetBubble) { targetDomIdx = abi; break; }
                 }
-                if (foundUser && (allBubbles[abi].classList.contains('message-ai') || allBubbles[abi].classList.contains('message-system'))) {
-                    allBubbles[abi].remove();
+                if (targetDomIdx === -1) {
+                    // 回退：移除最后一条用户消息后的气泡
+                    var lastUserDomIdx = -1;
+                    for (var abi = 0; abi < allBubbles.length; abi++) {
+                        if (allBubbles[abi].classList.contains('message-user')) lastUserDomIdx = abi;
+                    }
+                    targetDomIdx = lastUserDomIdx;
                 }
+                for (var abi = allBubbles.length - 1; abi > targetDomIdx; abi--) {
+                    var el = allBubbles[abi];
+                    if (el.classList.contains('message-ai') || el.classList.contains('message-system') || el.classList.contains('message-user')) {
+                        el.remove();
+                    }
+                }
+                // 目标气泡本身也要移除
+                if (targetBubble && targetBubble.parentNode) targetBubble.remove();
             }
         }
 
@@ -626,6 +684,19 @@
                 bubble = addMessage('...', 'ai', [], null, null);
             }
 
+            // 重新生成时，在最终气泡上附加版本数据
+            if (pendingVersionData) {
+                console.log('[版本] 附加版本数据, 旧内容:', pendingVersionData.content, '新内容:', fullContent);
+                var verData = pendingVersionData;
+                var allVersions = verData.versions ? verData.versions.slice() : [];
+                if (allVersions.length === 0 && verData.content !== undefined) {
+                    allVersions.push({ content: verData.content, reasoning: verData.reasoning });
+                }
+                allVersions.push({ content: fullContent, reasoning: fullReasoning || null });
+                iterAssistantMsg._versions = allVersions;
+                iterAssistantMsg._activeVersion = allVersions.length - 1;
+                pendingVersionData = null;
+            }
             var thinkElapsed = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : 0;
             if (thinkStartTime) { console.log('[Agent] 思考结束, 耗时:', thinkElapsed, '秒'); }
             console.log('[API] 响应完成, 内容长度:', fullContent.length, '字符');
@@ -634,7 +705,7 @@
             bubble.replaceWith(newBubble);
             updateHistoryTitle();
             saveChatToBackend();
-            if (typeof showAskPopup === 'function' && _pendingAsk) showAskPopup();
+            if (typeof showAskPopup === 'function' && _pendingAsk && typeof askAutoShow !== 'undefined' && askAutoShow) showAskPopup();
         } catch (e) {
             if (e && (e.name === 'AbortError' || e.code === 'ERR_CANCELED')) {
                 var md = bubble.querySelector('.markdown-body') || bubble;
@@ -645,6 +716,17 @@
                     console.log('[深度思考] 深度思考被中断, 耗时:', thinkElapsed2, '秒');
                 }
                 var assistantMsg = { role: 'assistant', content: fullContent, reasoning: fullReasoning || null, usage: streamUsage || null, apiRequest: apiRequest || null, thinkElapsed: thinkElapsed2 || null };
+                if (pendingVersionData) {
+                    var verData = pendingVersionData;
+                    var allVersions = verData.versions ? verData.versions.slice() : [];
+                    if (allVersions.length === 0 && verData.content !== undefined) {
+                        allVersions.push({ content: verData.content, reasoning: verData.reasoning });
+                    }
+                    allVersions.push({ content: fullContent, reasoning: fullReasoning || null });
+                    assistantMsg._versions = allVersions;
+                    assistantMsg._activeVersion = allVersions.length - 1;
+                    pendingVersionData = null;
+                }
                 chats[currentChat].push(assistantMsg);
                 updateHistoryTitle();
                 saveChatToBackend();

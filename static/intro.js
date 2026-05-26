@@ -50,8 +50,9 @@ window.showToast = function(msg) {
     var filesCurrentDir = '/';
 
     var isChatActive = false, deepThinkEnabled = false, currentThinkMode = 'fast', cothinkEnabled = true;
+    var chatBranches = {};
     var cachedThinkPrompt = '';
-    var commandExecEnabled = false, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true, askEnabled = true;
+    var commandExecEnabled = false, sandboxEnabled = true, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true, askEnabled = true, askAutoShow = true;
     var cachedMemories = [];
     var chats = [[]], chatTitles = [_('currentChatTitle')], chatTokens = [''], currentChat = 0;
     var activeFiles = { initial: [], chat: [] };
@@ -132,6 +133,9 @@ window.showToast = function(msg) {
                 if (s.cothinkEnabled !== undefined) cothinkEnabled = s.cothinkEnabled;
                 if (s.includeReasoning !== undefined) includeReasoning = s.includeReasoning;
                 if (s.askEnabled !== undefined) askEnabled = s.askEnabled;
+                if (s.askAutoShow !== undefined) askAutoShow = s.askAutoShow;
+                if (s.sandboxEnabled !== undefined) sandboxEnabled = s.sandboxEnabled;
+                if (s.usedAsks) _usedAsks = s.usedAsks;
                 if (s.maxContextTokens !== undefined) maxContextTokens = s.maxContextTokens;
             }
         } catch (e) {}
@@ -143,8 +147,14 @@ window.showToast = function(msg) {
 
     function saveSettingsToLocal() {
         try {
-            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled }));
+            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, sandboxEnabled: sandboxEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled, askAutoShow: askAutoShow, usedAsks: _usedAsks }));
         } catch (e) {}
+    }
+    function saveBranches() {
+        try { localStorage.setItem('fold_chat_branches', JSON.stringify(chatBranches)); } catch (e) {}
+    }
+    function loadBranches() {
+        try { var b = JSON.parse(localStorage.getItem('fold_chat_branches')); if (b) chatBranches = b; } catch (e) {}
     }
 
     var configPrompts = { think_modes: {} };
@@ -506,7 +516,10 @@ window.showToast = function(msg) {
             '<button class="think-mode-option' + (!includeReasoning ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + '模型提问' + '</span><div class="think-mode-selector" id="settingsAskToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (askEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!askEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
+            '<button class="think-mode-option' + (!askEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg>' + '自动弹出提问' + '</span><div class="think-mode-selector" id="settingsAskAutoToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (askAutoShow ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
+            '<button class="think-mode-option' + (!askAutoShow ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
         settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(o) {
             o.onclick = function() {
                 streamEnabled = o.dataset.value === 'true';
@@ -526,6 +539,13 @@ window.showToast = function(msg) {
                 askEnabled = o.dataset.value === 'true';
                 saveSettingsToLocal();
                 settingsPanelContent.querySelectorAll('#settingsAskToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+        settingsPanelContent.querySelectorAll('#settingsAskAutoToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                askAutoShow = o.dataset.value === 'true';
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsAskAutoToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
     }
@@ -1418,6 +1438,15 @@ window.showToast = function(msg) {
             editActions.appendChild(saveBtn);
             editActions.appendChild(cancelBtn);
             editWrap.appendChild(textarea);
+            // 编辑分支复选框
+            var branchLabel = document.createElement('label');
+            branchLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;color:#999;cursor:pointer;padding:4px 0;user-select:none;';
+            var branchCb = document.createElement('input');
+            branchCb.type = 'checkbox';
+            branchCb.checked = true;
+            branchLabel.appendChild(branchCb);
+            branchLabel.appendChild(document.createTextNode('在此消息后创建新对话分支'));
+            editWrap.appendChild(branchLabel);
             editWrap.appendChild(editActions);
             while (bubble.firstChild !== ad) {
                 bubble.removeChild(bubble.firstChild);
@@ -1436,6 +1465,30 @@ window.showToast = function(msg) {
                 var newContent = textarea.value.trim();
                 if (newContent && msgRef) {
                     msgRef.content = newContent;
+                    if (branchCb.checked) {
+                        // 创建新对话分支：截断后续消息
+                        var editIdx = chats[currentChat].indexOf(msgRef);
+                        if (editIdx !== -1 && editIdx < chats[currentChat].length - 1) {
+                            var branchMsgs = chats[currentChat].splice(editIdx + 1);
+                            if (!chatBranches[currentChat]) chatBranches[currentChat] = [];
+                            chatBranches[currentChat].push({
+                                fromMsgIdx: editIdx + 1,
+                                messages: branchMsgs,
+                                label: '分支 ' + (chatBranches[currentChat].length + 1),
+                                createdAt: Date.now()
+                            });
+                            saveBranches();
+                            // 移除 editIdx 之后的 DOM 气泡
+                            var allBubbles = chatAreaInner.querySelectorAll('.message-bubble');
+                            var foundTarget = false;
+                            var toRemove = [];
+                            for (var ei = 0; ei < allBubbles.length; ei++) {
+                                if (allBubbles[ei] === bubble) { foundTarget = true; continue; }
+                                if (foundTarget) toRemove.push(allBubbles[ei]);
+                            }
+                            toRemove.forEach(function(el) { el.remove(); });
+                        }
+                    }
                     var newBubble = createMessageBubble(newContent, role, msgRef.images || [], msgRef.reasoning || '', msgRef, '');
                     bubble.parentNode.replaceChild(newBubble, bubble);
                     saveChatToBackend();
@@ -1455,7 +1508,7 @@ window.showToast = function(msg) {
 
         if (role === 'ai') {
             ad.querySelector('[data-action="regenerate"]').onclick = function() {
-                sendMessage(true);
+                sendMessage(true, msgRef, bubble);
             };
             ad.querySelector('[data-action="tokens"]').onclick = function() {
                 var td = msgRef && msgRef.usage;
@@ -1479,8 +1532,39 @@ window.showToast = function(msg) {
                 var resp = { model: currentModel, usage: { prompt_tokens: it, completion_tokens: ot, total_tokens: tt }, timestamp: new Date().toISOString() };
                 openFileViewer('响应 JSON', '提供商返回的 Token 消耗\n\n模型: ' + currentModel + '\n输入 Token: ' + it + '\n输出 Token: ' + ot + '\n总计 Token: ' + tt + '\n\n' + JSON.stringify(resp, null, 2));
             };
+            // 版本切换器（多版本输出切换）
+            if (msgRef && msgRef._versions && msgRef._versions.length > 1) {
+                var totalVer = msgRef._versions.length;
+                var curVer = (msgRef._activeVersion !== undefined ? msgRef._activeVersion : totalVer - 1) + 1;
+                var vwrap = document.createElement('span');
+                vwrap.className = 'version-switcher';
+                vwrap.style.cssText = 'display:inline-flex;align-items:center;gap:2px;margin-left:auto;font-size:11px;color:#999;user-select:none;';
+                vwrap.innerHTML =
+                    '<button class="action-icon" data-action="prev-version" style="width:20px;height:20px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>' +
+                    '<span class="version-indicator">' + curVer + '/' + totalVer + '</span>' +
+                    '<button class="action-icon" data-action="next-version" style="width:20px;height:20px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>';
+                ad.appendChild(vwrap);
+                vwrap.querySelector('[data-action="prev-version"]').onclick = function(e) { e.stopPropagation(); switchVersion(bubble, msgRef, -1); };
+                vwrap.querySelector('[data-action="next-version"]').onclick = function(e) { e.stopPropagation(); switchVersion(bubble, msgRef, 1); };
+            }
         }
         return bubble;
+    }
+
+    // 切换 AI 输出的历史版本
+    function switchVersion(bubble, msgRef, direction) {
+        var versions = msgRef._versions;
+        if (!versions || versions.length < 2) return;
+        var curVer = msgRef._activeVersion !== undefined ? msgRef._activeVersion : versions.length - 1;
+        var newVer = curVer + direction;
+        if (newVer < 0 || newVer >= versions.length) return;
+        msgRef.content = versions[newVer].content;
+        msgRef.reasoning = versions[newVer].reasoning || null;
+        msgRef._activeVersion = newVer;
+        var role = bubble.classList.contains('message-ai') ? 'ai' : (bubble.classList.contains('message-user') ? 'user' : 'system');
+        var newBubble = createMessageBubble(msgRef.content, role, msgRef.images || [], msgRef.reasoning || '', msgRef);
+        bubble.parentNode.replaceChild(newBubble, bubble);
+        saveChatToBackend();
     }
 
     function refreshChatDisplay() {
@@ -1689,6 +1773,14 @@ window.showToast = function(msg) {
     function renderPluginBlocks(text) {
         _pluginBlockPlaceholders = {};
         var result = text;
+        // 保护被 `` 包裹的标记, 如 `<cmd>` 直接渲染不执行
+        var backtickProtected = {};
+        var btIdx = 0;
+        result = result.replace(/`(?:[^`]*)<(?:cmd|command|power|powershell|shell|mem:)[^`]*`/gi, function(match) {
+            var id = btIdx++;
+            backtickProtected[id] = match;
+            return '%%BTP_' + id + '%%';
+        });
         // Replace power/powershell blocks
         result = result.replace(/<(?:power|powershell)>\s*([\s\S]*?)\s*<\/(?:power|powershell)>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -1740,44 +1832,17 @@ window.showToast = function(msg) {
                 '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
                 '</div>');
         });
-        // 处理未闭合的开标签（流式输出中），检测到开标签立即折叠
-        // power/powershell 未闭合
-        result = result.replace(/<(?:power|powershell)>\s*([\s\S]*)$/gi, function(match, content) {
+        // 未闭合的开标签 —— 立即渲染为 streaming 块，不等闭标签
+        result = result.replace(/<(power|powershell|cmd|command|shell)>\s*([\s\S]*)$/gi, function(match, tag, content) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            var cmdShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
-            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
+            pluginBlockTimers[bid] = { done: false, type: 'cmd', content: content.trim() };
+            var contentShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
+            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
+                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(contentShort) + '</span>' +
+                '<span class="pb-tokens">( ' + formatTokens(estimateTokens(content.trim())) + 'Tokens )</span>' +
                 '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
-                '</div>');
-        });
-        // cmd/command 未闭合
-        result = result.replace(/<(?:cmd|command)>\s*([\s\S]*)$/gi, function(match, content) {
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            var cmdShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
-            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
-                '</div>');
-        });
-        // shell 未闭合
-        result = result.replace(/<shell>\s*([\s\S]*)$/gi, function(match, content) {
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: false, type: 'cmd', content: content.trim() };
-            var cmdShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
-            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
                 '</div>');
         });
         // mem:key 未闭合
@@ -1792,6 +1857,8 @@ window.showToast = function(msg) {
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
                 '</div>');
         });
+        // Clear any pending ask from previous iterations; will be re-set below if current content has one
+        _pendingAsk = null;
         // Replace <ask> blocks — render inline block + store for popup
         result = result.replace(/<ask>([\s\S]*?)<\/ask>/gi, function(match, inner) {
             var qMatch = inner.match(/<q=([^>]*)>/);
@@ -1800,10 +1867,11 @@ window.showToast = function(msg) {
             inner.replace(/<o\d=([^>]*)>/gi, function(m, val) { opts.push(val.trim()); });
             if (question && opts.length > 0) {
                 _pendingAsk = { question: question, options: opts };
+                var used = _usedAsks[question] ? ' data-ask-used="true"' : '';
                 var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
                 var optPreview = opts.map(function(o) { return '<span style="display:inline-block;padding:2px 10px;margin:2px 4px 2px 0;border-radius:12px;border:1px solid var(--plugin-border,#ddd);font-size:12px;">' + escapeHtml(o) + '</span>'; }).join('');
-                return _pluginMark('<div class="plugin-block ask-block" id="' + bid + '">' +
-                    '<div class="plugin-block-header" style="cursor:default;">' +
+                return _pluginMark('<div class="plugin-block ask-block"' + used + ' id="' + bid + '">' +
+                    '<div class="plugin-block-header" style="cursor:pointer;">' +
                     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' +
                     '<span class="plugin-block-title">' + escapeHtml(question) + '</span>' +
                     '</div>' +
@@ -1815,6 +1883,10 @@ window.showToast = function(msg) {
         // Remove mem-del tags and conti:994
         result = result.replace(/<mem-del:[^>]+>/gi, '');
         result = result.replace(/<conti:994>/gi, '');
+        // 恢复被保护的反引号内容
+        result = result.replace(/%%BTP_(\d+)%%/g, function(m, id) {
+            return backtickProtected[id] || '';
+        });
         return result;
     }
 
@@ -1833,7 +1905,7 @@ window.showToast = function(msg) {
         }
         activeFiles['initial'] = [];
         if (initPreview) renderPreviews(initPreview, []);
-        if (initText) initText.value = '';
+        if (initText) { initText.value = ''; initText.style.height = 'auto'; }
         updateHeaderTitle();
     }
 
@@ -1842,8 +1914,8 @@ window.showToast = function(msg) {
         document.body.classList.remove('chat-active');
         if (centerInit) { centerInit.style.display = null; centerInit.classList.remove('slide-down'); }
         if (chatAreaInner) chatAreaInner.innerHTML = '';
-        if (initText) initText.value = '';
-        if (chatText) chatText.value = '';
+        if (initText) { initText.value = ''; initText.style.height = 'auto'; }
+        if (chatText) { chatText.value = ''; chatText.style.height = 'auto'; }
         activeFiles['initial'] = [];
         activeFiles['chat'] = [];
         if (initPreview) renderPreviews(initPreview, []);
@@ -2114,17 +2186,40 @@ window.showToast = function(msg) {
 
 
     chatArea.addEventListener('scroll', function() {
-        var atBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 40;
+        var scrollUpPx = lastScrollTop - chatArea.scrollTop;
+        var atBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 3;
+        // 往上滑立即脱离自动滚动
+        if (scrollUpPx > 0) {
+            isUserScrolledAway = true;
+        }
+        // 回到最下方自动恢复
         if (atBottom) {
             isUserScrolledAway = false;
-        } else if (chatArea.scrollTop < lastScrollTop) {
-            isUserScrolledAway = true;
         }
         lastScrollTop = chatArea.scrollTop;
     });
     var userExpandedBodies = {};
     var _pendingAsk = null;
+    var _usedAsks = {};
     chatArea.addEventListener('click', function(e) {
+        var askBlock = e.target.closest('.ask-block');
+        if (askBlock) {
+            if (!askBlock.hasAttribute('data-ask-used')) {
+                var titleEl = askBlock.querySelector('.plugin-block-title');
+                var question = titleEl ? titleEl.textContent.trim() : '';
+                if (question) {
+                    var optEls = askBlock.querySelectorAll('.plugin-block-body span');
+                    var options = [];
+                    optEls.forEach(function(el) { options.push(el.textContent.trim()); });
+                    if (options.length > 0) {
+                        _pendingAsk = { question: question, options: options };
+                        showAskPopup();
+                        return;
+                    }
+                }
+            }
+            return;
+        }
         var collapsed = e.target.closest('.msg-collapsed');
         if (collapsed) collapsed.classList.toggle('expanded');
         var pbHeader = e.target.closest('.plugin-block-header');
@@ -2174,6 +2269,17 @@ window.showToast = function(msg) {
                 overlay.classList.remove('active');
                 setTimeout(function() { overlay.remove(); }, 200);
                 if (!answer) return; // "什么都不选" has no data-value
+                // Mark this ask as used
+                if (data.question) {
+                    _usedAsks[data.question] = true;
+                    document.querySelectorAll('.ask-block').forEach(function(el) {
+                        var t = el.querySelector('.plugin-block-title');
+                        if (t && t.textContent.trim() === data.question) {
+                            el.setAttribute('data-ask-used', 'true');
+                        }
+                    });
+                    saveSettingsToLocal();
+                }
                 // Add answer as user message and send
                 var ta = isChatActive ? chatText : initText;
                 ta.value = answer;
@@ -2207,6 +2313,17 @@ window.showToast = function(msg) {
         var chatDeepThinkBtn = document.getElementById('chatDeepThinkBtn');
         if (!initDeepThinkBtn || !chatDeepThinkBtn) { console.warn('深度思考按钮未找到'); return; }
 
+
+        // Auto-resize input textareas up to 2.5x base height
+        [initText, chatText].forEach(function(ta) {
+            if (!ta) return;
+            var baseH = ta.scrollHeight || 46;
+            ta.addEventListener("input", function autoResizeInput() {
+                ta.style.height = "auto";
+                ta.style.height = Math.min(ta.scrollHeight, baseH * 2.5) + "px";
+            });
+        });
+
         var currentPopup = null;
         function createDeepThinkPopup(triggerBtn) {
             var existing = document.querySelector('.deep-think-popup');
@@ -2214,7 +2331,7 @@ window.showToast = function(msg) {
             var popup = document.createElement('div');
             popup.className = 'deep-think-popup';
             popup._triggerBtn = triggerBtn;
-            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>模型提问</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
+            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>安全沙箱</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>模型提问</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
             document.body.appendChild(popup);
             var rect = triggerBtn.getBoundingClientRect();
             popup.style.left = (rect.left + rect.width / 2 - 10) + 'px';
@@ -2269,6 +2386,11 @@ window.showToast = function(msg) {
                         popup.querySelectorAll('.tool-chain-option[data-tool="ask"]').forEach(function(o) { o.classList.toggle('active', o === op); });
                         saveSettingsToLocal();
                     }
+                    if (tool === 'sandbox') {
+                        sandboxEnabled = value === 'on';
+                        popup.querySelectorAll('.tool-chain-option[data-tool="sandbox"]').forEach(function(o) { o.classList.toggle('active', o === op); });
+                        saveSettingsToLocal();
+                    }
                 });
             });
             var closeHandler = function(e) { if (!popup.contains(e.target) && e.target !== triggerBtn) { popup.classList.remove('active'); setTimeout(function() { popup.remove(); currentPopup = null; }, 200); document.removeEventListener('click', closeHandler); } };
@@ -2280,6 +2402,7 @@ window.showToast = function(msg) {
     });
 
     loadSettings();
+    loadBranches();
     var langText = document.getElementById('langSwitchText');
     if (langText) {
         langText.addEventListener('click', function() {

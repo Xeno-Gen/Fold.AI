@@ -121,7 +121,7 @@
         }
         .app-container{display:flex;height:100vh;height:100dvh;width:100%;position:relative;}
         .sidebar-left{
-            position:fixed;left:-280px;top:0;width:280px;min-width:280px;height:100vh;
+            position:fixed;left:-25vw;top:0;width:25vw;min-width:200px;max-width:420px;height:100vh;
             background:#fafafa;border-right:0.5px solid var(--border);
             display:flex;flex-direction:column;align-items:stretch;padding:16px 0 16px 12px;gap:6px;
             z-index:100;transition:left var(--transition),box-shadow 0.3s ease;overflow:hidden;
@@ -137,7 +137,7 @@
             transition:left 0.3s cubic-bezier(0.4,0,0.2,1),background 0.2s,box-shadow 0.2s;
         }
         .sidebar-toggle:hover{background:#f0f0f0;box-shadow:0 1px 6px rgba(0,0,0,0.1);}
-        .sidebar-left.visible .sidebar-toggle{left:calc(280px - 38px - 8px);background:transparent;box-shadow:none;}
+        .sidebar-left.visible .sidebar-toggle{left:clamp(154px, 25vw - 46px, 374px);background:transparent;box-shadow:none;}
         .sidebar-left.visible .sidebar-toggle:hover{background:rgba(0,0,0,0.04);}
         .sidebar-newchat-fab{
             position:fixed;top:52px;left:8px;width:38px;height:38px;
@@ -160,9 +160,9 @@
         @media(max-width:768px){.sidebar-newchat-fab{top:52px;}.sidebar-settings-fab{top:auto;bottom:12px;}}
         /* 桌面端：侧边栏展开时右边内容右移 */
         @media(min-width:769px){
-            .sidebar-left{position:fixed;left:-280px;}
+            .sidebar-left{position:fixed;left:-25vw;}
             .sidebar-left.visible{left:0;}
-            .sidebar-left.visible ~ .main-content{margin-left:280px;}
+            .sidebar-left.visible ~ .main-content{margin-left:clamp(200px, 25vw, 420px);}
             .main-content{transition:margin-left var(--transition);}
         }
         .sidebar-content{display:none;flex-direction:column;gap:6px;width:100%;overflow-y:auto;flex:1;padding-right:12px;}
@@ -269,7 +269,7 @@
         .input-inner-area{padding:15px 18px 6px;}
         .input-textarea{
             width:100%;border:none;outline:none;resize:none;font-size:15px;font-family:inherit;
-            color:#1a1a1a;background:transparent;line-height:1.55;min-height:50px;max-height:160px;padding:0;
+            color:#1a1a1a;background:transparent;line-height:1.55;min-height:50px;max-height:none;padding:0;
         }
         .input-textarea::placeholder{color:#aaa;}
         .input-toolbar{

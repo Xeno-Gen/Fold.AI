@@ -447,7 +447,7 @@
             if (e.key === 'ArrowUp') { e.preventDefault(); navigateSlashPopup(-1); return true; }
             if (e.key === 'Tab') { e.preventDefault(); selectSlashCommand(); return true; }
             if (e.key === 'Escape') { e.preventDefault(); hideSlashPopup(ta); return true; }
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
                 e.preventDefault();
                 if (!selectSlashCommand()) {
                     hideSlashPopup(ta);
@@ -455,7 +455,7 @@
                 return true;
             }
         }
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
             e.preventDefault();
             if (!selectSlashCommand()) {
                 var val = ta.value.trim();

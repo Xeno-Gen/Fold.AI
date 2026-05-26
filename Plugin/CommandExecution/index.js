@@ -180,6 +180,22 @@
                 if (pattern.test(command)) return false;
             }
 
+            // 路径逃逸检测：阻止访问工作目录外的路径
+            const pathEscapePatterns = [
+                /\b(?:cd|chdir)\s+\.\.[\\/]/i,          // cd ..
+                /\b(?:cd|chdir)\s+[\\/](?:\s|$|[&|;])/i, // cd \
+                /\b(?:set-location|sl|pushd|push-location)\s+\.\.[\\/]/i,
+                /[\s(]\.\.[\\/]/,                         // 参数中的 ..\
+                /\\\\[^\\]+\\/i,                          // UNC 路径
+                /\breg\s+(?:add|delete|copy|save|restore)\s+/i, // 写注册表
+                /[A-Za-z]:\\[Ww]indows/i,                 // C:\Windows
+                /[A-Za-z]:\\Program\s*Files/i,            //  Program Files
+                /[A-Za-z]:\\[Aa]pp[ Dd]ata/i,            // AppData
+            ];
+            for (const pattern of pathEscapePatterns) {
+                if (pattern.test(command)) return false;
+            }
+
             // 默认允许
             return true;
         }
