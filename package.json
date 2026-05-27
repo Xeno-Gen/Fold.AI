@@ -17,13 +17,23 @@
     "config/.env.example"
   ],
   "scripts": {
-    "build": "tsc && npm run copy-assets",
+    "build": "tsc && npm run build-vue && npm run copy-assets",
     "copy-assets": "node -e \"var fs=require('fs'),p=require('path'),root=process.cwd(),dirs=['static','Plugin','com','config'];dirs.forEach(function(d){var s=p.join(root,d),t=p.join(root,'dist',d);fs.cpSync(s,t,{recursive:true})});try{fs.unlinkSync(p.join(root,'dist','config','.env'))}catch(e){}\"",
     "start": "node dist/bin/server.js",
     "dev": "ts-node bin/server.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "build-vue": "npx esbuild static/vue/app.ts --bundle --outfile=static/vue/app.js --format=iife --global-name=VueApp"
   },
-  "keywords": ["ai", "chat", "llm", "openai", "anthropic", "claude", "deepseek", "self-hosted"],
+  "keywords": [
+    "ai",
+    "chat",
+    "llm",
+    "openai",
+    "anthropic",
+    "claude",
+    "deepseek",
+    "self-hosted"
+  ],
   "author": "Fold.AI",
   "license": "MIT",
   "repository": {
@@ -38,7 +48,8 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "multer": "^2.1.1",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "vue": "^3.5.35"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

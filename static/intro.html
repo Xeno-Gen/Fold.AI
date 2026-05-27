@@ -809,6 +809,7 @@
             .files-panel{margin-top:40px;}
         }
     </style>
+    <link rel="stylesheet" href="/vue/vue-components.css">
 </head>
 <body>
     <div class="lang-switcher" id="langSwitcher">
@@ -838,6 +839,7 @@
             <button class="new-chat-btn" id="newChatSidebarBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span data-i18n="newChat">新对话</span></button>
             <div class="sidebar-section-title"><span data-i18n="chatHistory">对话历史</span></div>
             <ul class="chat-history-list" id="chatHistoryList"></ul>
+            <div id="vue-history-list"></div>
         </div>
         <button class="sidebar-settings-btn" id="sidebarSettingsBtn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -940,6 +942,7 @@
             <div class="files-panel-body" id="filesPanelBody">
                 <div class="files-panel-empty">加载中...</div>
             </div>
+            <div id="vue-file-browser" style="height:100%;"></div>
         </div>
         <!-- 设置面板（双栏布局替换右侧内容） -->
         <div class="settings-panel" id="settingsPanel">
@@ -1097,5 +1100,6 @@
 <script src="/chat.js"></script>
 <script src="/slash.js"></script>
 <script src="/debug.js"></script>
+<script src="/vue/app.js"></script>
 </body>
 </html>
