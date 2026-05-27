@@ -22,12 +22,17 @@ export function getSystemPrompt(): string {
  */
 export function getPluginPrompts(): Record<string, string> {
     const pluginDir = path.join(CONFIG_DIR, 'Plugin');
-    if (!fs.existsSync(pluginDir)) return {};
-    const files = fs.readdirSync(pluginDir).filter(f => f.endsWith('.md'));
+    const guidelineDir = path.join(CONFIG_DIR, 'guidelines');
     const result: Record<string, string> = {};
-    for (const f of files) {
-        const key = f.replace(/\.md$/, '');
-        result[key] = fs.readFileSync(path.join(pluginDir, f), 'utf-8').trimEnd();
+    if (fs.existsSync(pluginDir)) {
+        for (const f of fs.readdirSync(pluginDir).filter(f => f.endsWith('.md'))) {
+            result[f.replace(/\.md$/, '')] = fs.readFileSync(path.join(pluginDir, f), 'utf-8').trimEnd();
+        }
+    }
+    if (fs.existsSync(guidelineDir)) {
+        for (const f of fs.readdirSync(guidelineDir).filter(f => f.endsWith('.md'))) {
+            result[f.replace(/\.md$/, '')] = fs.readFileSync(path.join(guidelineDir, f), 'utf-8').trimEnd();
+        }
     }
     return result;
 }

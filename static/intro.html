@@ -157,7 +157,7 @@
         }
         .sidebar-settings-fab:hover{background:#f0f0f0;color:#1a1a1a;}
         .sidebar-left.visible .sidebar-settings-fab{opacity:0;pointer-events:none;}
-        @media(max-width:768px){.sidebar-newchat-fab{top:52px;}.sidebar-settings-fab{top:auto;bottom:12px;}}
+        @media(max-width:768px){.sidebar-newchat-fab{top:52px;}.sidebar-settings-fab{top:auto;bottom:12px;}.sidebar-left{left:-100%;}.sidebar-left.visible{left:0;}}
         /* 桌面端：侧边栏展开时右边内容右移 */
         @media(min-width:769px){
             .sidebar-left{position:fixed;left:-25vw;}
@@ -1053,6 +1053,7 @@
                         <button class="think-mode-option" data-value="false">关闭</button>
                     </div>
                 </div>
+
             </div>
 
             <!-- 关于 -->
@@ -1095,5 +1096,6 @@
 <script src="/intro.js"></script>
 <script src="/chat.js"></script>
 <script src="/slash.js"></script>
+<script src="/debug.js"></script>
 </body>
 </html>

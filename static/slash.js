@@ -192,9 +192,11 @@
         var toolPromptText = '';
         if (typeof pluginPrompts !== 'undefined' && pluginPrompts) {
             var parts = [];
-            if (commandExecEnabled && pluginPrompts.tools) parts.push(pluginPrompts.tools);
-            if (agentEnabled && pluginPrompts.agent) parts.push(pluginPrompts.agent);
+            if (commandExecEnabled && pluginPrompts.Command) parts.push(pluginPrompts.Command);
+            if (agentEnabled && pluginPrompts.Agent) parts.push(pluginPrompts.Agent);
             if (cothinkEnabled && pluginPrompts.cothink) parts.push(pluginPrompts.cothink);
+            if (memoryEnabled && pluginPrompts.Memory) parts.push(pluginPrompts.Memory);
+            if (askEnabled && pluginPrompts.Ask) parts.push(pluginPrompts.Ask);
             toolPromptText = parts.join('\n');
         }
         var toolTokens = toolPromptText ? estimateTokens(toolPromptText) : 0;

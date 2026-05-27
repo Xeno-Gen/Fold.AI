@@ -9,6 +9,10 @@
 [English README](https://github.com/Xeno-Gen/Fold.AI/edit/main/README-en.md)
 [简体中文 README](https://github.com/Xeno-Gen/Fold.AI)
 
+## 为什么做这个？
+***AI工具常有提示词污染，为了特化而特化。却永远没有一个能兼顾日常场景，如沙盒般自定义的AI框架——***
+- 而我们的愿景是，一个能支持你日常、编程、聊天的万能框架，并赋予它堆砌的创新。
+
 ## 安装
 目前`Fold.ai`未上线任何包管理器平台，发行版本已被构建为原生JavaScript，可以使用Node.js直接运行
 ```

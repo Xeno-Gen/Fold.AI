@@ -370,7 +370,8 @@
                 );
             }
             if (!stdout && !stderr) {
-                html += `<div class="execution-empty">命令已执行 (退出码: ${exitCode})</div>`;
+                const emptyMsg = exitCode === 0 ? '命令已成功执行（无输出内容）' : `命令执行失败（无输出内容）`;
+                html += `<div class="execution-empty">${emptyMsg} (退出码: ${exitCode})</div>`;
             }
             html += `<div class="execution-exit-code">退出码: ${exitCode}</div>`;
 

@@ -9,10 +9,18 @@
 [English README](https://github.com/Xeno-Gen/Fold.AI/edit/main/README-en.md)
 [简体中文 README](https://github.com/Xeno-Gen/Fold.AI)
 
+## Why build this?
+
+***AI tools often suffer from prompt pollution, specializing to the point of over-specialization. Yet there has never been a universal AI framework that handles everyday scenarios and is as customizable as a sandbox—***
+
+- Our vision is a universal framework that supports your daily life, coding, and chatting, and empowers you to build upon it with endless innovation.
+
 ## Installation
-Currently, `Fold.ai` is not available on any package manager platform. The release version has been built into native JavaScript and can be run directly using Node.js.
+
+Currently, `Fold.AI` is not available on any package manager platform. The release version has been built as native JavaScript and can be run directly with Node.js.
+
 ```
-#1. Build project dependencies manually
+#1. Manually build project dependencies
 cd fold
 npm install
 Node bin/server.js
@@ -24,7 +32,6 @@ Double-click the .bat file
 Double-click the .sh file
 ```
 
-
 ## 🤝 Contributing
 
 Issues and PRs are welcome!
@@ -33,4 +40,4 @@ Issues and PRs are welcome!
 
 MIT © 2026 Fold.AI Contributors
 
-**⭐ If you find this "20-minute project" interesting, please give it a Star!**
+**⭐ If this "20-minute project" amuses you, please give it a Star!**

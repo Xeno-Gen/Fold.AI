@@ -7,7 +7,7 @@
 
     function stripTags(text) {
         return text
-            .replace(/<mem:[^>]+>[\s\S]*?<\/mem:[^>]+>/gi, '')
+            .replace(/<mem:[^>]+>[\s\S]*?<\/mem>/gi, '')
             .replace(/<power>[\s\S]*?<\/power>/gi, '')
             .replace(/<powershell>[\s\S]*?<\/powershell>/gi, '')
             .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
@@ -138,8 +138,8 @@
     }
 
     async function processMemoryCalls(responseText) {
-        // Parse <mem:key>content</mem:key> tags
-        var memRegex = /<mem:([^>]+)>([\s\S]*?)<\/mem:\1>/gi;
+        // Parse <mem:key>content</mem> tags
+        var memRegex = /<mem:([^>]+)>([\s\S]*?)<\/mem>/gi;
         var memDelRegex = /<mem-del:([^>]+)>/gi;
         var anyMemOp = false;
         var match;
@@ -215,23 +215,21 @@
     // 从 pluginPrompts 模板构建工具提示词
     function buildToolPrompt() {
         var parts = [];
-        if (agentEnabled && pluginPrompts.agent) {
-            parts.push(pluginPrompts.agent);
+        if (agentEnabled && pluginPrompts.Agent) {
+            parts.push(pluginPrompts.Agent);
         }
-        if ((commandExecEnabled || memoryEnabled || askEnabled)) {
-            var toolContent = '';
-            toolContent = pluginPrompts.tools || '';
-            parts.push(toolContent.trim());
-
-            // Append dynamic content (work dir) after the static md
-            var dynamicParts = [];
-            if (commandExecEnabled) {
-                var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
-                dynamicParts.push('\n默认工作目录为 ' + wd + '，所有命令默认在此目录执行，记住在查看文件时不能虚构文件夹，最佳做法是使用查阅目录的命令');
-            }
-            if (dynamicParts.length) {
-                parts.push(dynamicParts.join('\n').trim());
-            }
+        if (commandExecEnabled && pluginPrompts.Command) {
+            parts.push(pluginPrompts.Command);
+        }
+        if (memoryEnabled && pluginPrompts.Memory) {
+            parts.push(pluginPrompts.Memory);
+        }
+        if (askEnabled && pluginPrompts.Ask) {
+            parts.push(pluginPrompts.Ask);
+        }
+        if (commandExecEnabled) {
+            var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
+            parts.push('默认工作目录为 ' + wd + '，所有命令默认在此目录执行，记住在查看文件时不能虚构文件夹，最佳做法是使用查阅目录的命令');
         }
         return parts.join('\n').trim();
     }
@@ -563,6 +561,19 @@
                         iterMsgs.push({ role: 'user', content: '[视频帧: ' + vf.fileName + ']', images: [vf.content] });
                     });
                 }
+                // 插件状态 — 实时展示开关状态
+                var statusLines = [];
+                statusLines.push('- 命令执行: ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? '开启' : '关闭'));
+                statusLines.push('- 记忆: ' + (typeof memoryEnabled !== 'undefined' && memoryEnabled ? '开启' : '关闭'));
+                statusLines.push('- 安全沙箱: ' + (typeof sandboxEnabled !== 'undefined' && sandboxEnabled ? '开启' : '关闭'));
+                statusLines.push('- 模型提问: ' + (typeof askEnabled !== 'undefined' && askEnabled ? '开启' : '关闭'));
+                statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? '开启' : '关闭'));
+                statusLines.push('- 思维链注入: ' + (typeof cothinkEnabled !== 'undefined' && cothinkEnabled ? '开启' : '关闭'));
+                var statusText = '[当前插件状态]\n' + statusLines.join('\n');
+                var sysCount2 = 0;
+                while (sysCount2 < iterMsgs.length && iterMsgs[sysCount2].role === 'system') sysCount2++;
+                iterMsgs.splice(sysCount2, 0, { role: 'system', content: statusText, images: [] });
+
                 // 记忆作为独立 system 消息，排在所有 system 消息之后、用户消息之前
                 if (memoryEnabled && cachedMemories.length > 0) {
                     var memContent = '[已有记忆]\n';
