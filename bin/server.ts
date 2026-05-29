@@ -161,10 +161,46 @@ app.get('/api/files/read', (req, res) => {
             const content = fs.readFileSync(filePath, 'utf-8');
             return res.json({ name: path.basename(filePath), content, size: stat.size, mtime: stat.mtime.toISOString(), text: true });
         }
+        if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico'].includes(ext)) {
+            const data = fs.readFileSync(filePath);
+            const b64 = data.toString('base64');
+            const mime = ext === '.svg' ? 'image/svg+xml' : `image/${ext.replace('.', '')}`;
+            return res.json({ name: path.basename(filePath), size: stat.size, mtime: stat.mtime.toISOString(), text: false, ext, image: `data:${mime};base64,${b64}` });
+        }
         res.json({ name: path.basename(filePath), size: stat.size, mtime: stat.mtime.toISOString(), text: false, ext });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
+});
+
+// 删除文件
+app.delete('/api/files/delete', (req, res) => {
+    try {
+        const workDir = (req.query.workingDirectory as string) || undefined;
+        const filePath = resolveWorkPath(req.query.file as string || '', workDir);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
+        const stat = fs.statSync(filePath);
+        if (stat.isDirectory()) { fs.rmSync(filePath, { recursive: true }); }
+        else { fs.unlinkSync(filePath); }
+        res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// 重命名文件
+app.post('/api/files/rename', (req, res) => {
+    try {
+        const workDir = (req.query.workingDirectory as string) || undefined;
+        const oldPath = resolveWorkPath(req.body.file as string, workDir);
+        const newName = req.body.newName as string;
+        if (!oldPath || !newName) return res.status(400).json({ error: '参数缺失' });
+        if (!fs.existsSync(oldPath)) return res.status(404).json({ error: '文件不存在' });
+        const dir = path.dirname(oldPath);
+        const newPath = path.join(dir, path.basename(newName));
+        if (!newPath.startsWith(dir)) return res.status(403).json({ error: '非法路径' });
+        if (fs.existsSync(newPath)) return res.status(409).json({ error: '目标文件已存在' });
+        fs.renameSync(oldPath, newPath);
+        res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/chat/:token', (req, res) => {

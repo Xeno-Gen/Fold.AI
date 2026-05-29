@@ -662,6 +662,28 @@
                 }
                 }
 
+                // 保底机制: 如果模型仅在深度思考输出内容，正式输出为空，则重新调用一次
+                if (!fullContent?.trim() && fullReasoning?.trim()) {
+                    console.log('[保底] 模型仅输出深度思考，重新调用...');
+                    var fbMsgs = reorderMessages(
+                        compressOldExecMessages(
+                            chats[currentChat].filter(function(m) { return m.role; }).map(function(m) {
+                                return { role: m.role, content: m.content, images: m.images || [], _isExec: m._isExec };
+                            })
+                        )
+                    );
+                    var fbPrompt = buildToolPrompt();
+                    if (fbPrompt) fbMsgs.unshift({ role: 'system', content: fbPrompt, images: [] });
+                    try {
+                        var fbRes = await callAPI(fbMsgs, { model: currentModel, messages: fbMsgs, stream: false, max_tokens: currentParams.max_tokens || 4096, temperature: currentParams.temperature || 0.6 });
+                        if (fbRes.json) {
+                            var fbC = fbRes.json.choices?.[0]?.message?.content || '';
+                            var fbR = fbRes.json.choices?.[0]?.message?.reasoning_content || '';
+                            if (fbC?.trim()) { fullContent = fbC; if (fbR) fullReasoning = fbR; }
+                        }
+                    } catch (e) { console.error('[保底] 重调用失败:', e); }
+                }
+
                 // Save this iteration to chat (before agent check so non-agent mode also saves)
                 var iterAssistantMsg = { role: 'assistant', content: fullContent, reasoning: fullReasoning || null, usage: streamUsage || null, apiRequest: streamRequestBody || apiRequest || null };
                 chats[currentChat].push(iterAssistantMsg);

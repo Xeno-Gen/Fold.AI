@@ -1,266 +1,269 @@
-import { createApp, ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 
-// ========== 文件浏览器组件 ==========
-const FileBrowser = {
+// ========== 后端 API ==========
+const API = {
+    async browse(dir?: string, wd?: string) {
+        const p = new URLSearchParams();
+        if (dir) p.set('dir', dir);
+        if (wd) p.set('workingDirectory', wd);
+        const r = await fetch('/api/files/browse?' + p.toString());
+        return r.ok ? r.json() : { items: [] };
+    },
+    async read(file: string, wd?: string) {
+        const p = new URLSearchParams({ file });
+        if (wd) p.set('workingDirectory', wd);
+        const r = await fetch('/api/files/read?' + p.toString());
+        return r.ok ? r.json() : null;
+    },
+    async del(file: string, wd?: string) {
+        const p = new URLSearchParams({ file });
+        if (wd) p.set('workingDirectory', wd);
+        const r = await fetch('/api/files/delete?' + p.toString(), { method: 'DELETE' });
+        return r.ok;
+    },
+    async rename(file: string, newName: string, wd?: string) {
+        const p = new URLSearchParams();
+        if (wd) p.set('workingDirectory', wd);
+        const r = await fetch('/api/files/rename?' + p.toString(), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file, newName })
+        });
+        return r.ok;
+    }
+};
+
+// ========== 文件浏览器 ==========
+const FileBrowserComp = {
     name: 'FileBrowser',
     template: `
-    <div class="vue-file-browser">
+    <div class="vue-fb">
         <div class="vue-fb-toolbar">
-            <span class="vue-fb-path">{{ currentPath }}</span>
-            <button class="vue-fb-refresh" @click="refresh">⟳</button>
+            <button class="vue-fb-back" @click="goBack" :disabled="!parentDir">←</button>
+            <span class="vue-fb-path">{{ path }}</span>
+            <button class="vue-fb-btn" @click="load">⟳</button>
         </div>
-        <div class="vue-fb-grid" @contextmenu.prevent="closeContext">
-            <div v-for="item in items" :key="item.name"
-                class="vue-fb-item"
-                :class="{ 'vue-fb-selected': selected === item.name }"
-                @click="select(item.name)"
-                @dblclick="openItem(item)"
-                @contextmenu.prevent.stop="showContext($event, item)">
+        <div class="vue-fb-grid" @contextmenu.prevent="closeCtx" @click="closeCtx">
+            <div v-for="item in items" :key="item.name" class="vue-fb-item"
+                :class="{ selected: sel === item.name }"
+                @click="sel = item.name"
+                @dblclick="open(item)"
+                @contextmenu.prevent.stop="showCtx($event, item)">
                 <div class="vue-fb-icon">
-                    <span v-if="item.isDir">📁</span>
-                    <span v-else-if="isImage(item.name)">🖼</span>
-                    <span v-else>📄</span>
+                    <img v-if="isImage(item.name) && thumbs[item.name]" :src="thumbs[item.name]" class="vue-fb-thumb">
+                    <span v-else-if="item.isDir" class="vue-fb-ico">📁</span>
+                    <span v-else class="vue-fb-ico">📄</span>
                 </div>
-                <div class="vue-fb-name">{{ item.name }}</div>
+                <div class="vue-fb-lbl">{{ item.name }}</div>
             </div>
-            <div v-if="items.length === 0" class="vue-fb-empty">空目录</div>
+            <div v-if="!loading && items.length === 0" class="vue-fb-empty">空目录</div>
+            <div v-if="loading" class="vue-fb-empty">加载中...</div>
         </div>
-        <!-- 右键菜单 -->
-        <div v-if="contextMenu.visible" class="vue-fb-context"
-            :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-            <div class="vue-fb-context-item" @click="viewItem">查看</div>
-            <div class="vue-fb-context-item" @click="renameItem">重命名</div>
-            <div class="vue-fb-context-item" @click="downloadItem">下载</div>
-            <div class="vue-fb-context-divider"></div>
-            <div class="vue-fb-context-item vue-fb-context-danger" @click="deleteItem">删除</div>
+        <div v-if="ctx.show" class="vue-fb-ctx" :style="{ left: ctx.x+'px', top: ctx.y+'px' }">
+            <div class="vue-fb-ctx-i" @click="doView">查看</div>
+            <div class="vue-fb-ctx-i" @click="doRename">重命名</div>
+            <div class="vue-fb-ctx-i" @click="doDownload">下载</div>
+            <div class="vue-fb-ctx-div"></div>
+            <div class="vue-fb-ctx-i vue-fb-ctx-danger" @click="doDelete">删除</div>
         </div>
-        <!-- 重命名输入框 -->
-        <div v-if="renaming" class="vue-fb-rename-overlay" @click.self="renaming = ''">
-            <div class="vue-fb-rename-dialog">
-                <div>重命名</div>
-                <input v-model="renameNew" @keyup.enter="doRename" @keyup.escape="renaming = ''">
-                <div class="vue-fb-rename-actions">
-                    <button @click="doRename">确定</button>
-                    <button @click="renaming = ''">取消</button>
+        <div v-if="rename.active" class="vue-fb-overlay" @click.self="rename.active=false">
+            <div class="vue-fb-dlg">
+                <div class="vue-fb-dlg-title">重命名</div>
+                <input v-model="rename.name" @keyup.enter="confirmRename" @keyup.escape="rename.active=false" class="vue-fb-input">
+                <div class="vue-fb-dlg-acts">
+                    <button class="vue-fb-btn-p" @click="confirmRename">确定</button>
+                    <button class="vue-fb-btn-s" @click="rename.active=false">取消</button>
                 </div>
             </div>
         </div>
     </div>`,
     setup() {
-        const currentPath = ref('/');
+        const path = ref('/');
+        const parentDir = ref('');
         const items = ref<any[]>([]);
-        const selected = ref('');
-        const renaming = ref('');
-        const renameNew = ref('');
-        const contextMenu = reactive({ visible: false, x: 0, y: 0, item: null as any });
+        const sel = ref('');
+        const loading = ref(false);
+        const ctx = reactive({ show: false, x: 0, y: 0, item: null as any });
+        const rename = reactive({ active: false, name: '', item: null as any });
+        const thumbs = reactive<Record<string, string>>({});
+        let wd = '';
 
-        async function loadDir(dir?: string) {
-            const params = new URLSearchParams();
-            if (dir) params.set('dir', dir);
-            const wd = (window as any).defaultWorkDir;
-            if (wd) params.set('workingDirectory', wd);
-            try {
-                const res = await fetch('/api/files/browse?' + params.toString());
-                if (res.ok) {
-                    const data = await res.json();
-                    currentPath.value = data.path || '/';
-                    items.value = data.items || [];
-                }
-            } catch (e) { console.error('[VueFB] browse error:', e); }
+        function getWd() {
+            const g = window as any;
+            return g.defaultWorkDir || (g.CommandExecutionPlugin?.workingDirectory) || 'cwd';
         }
 
-        function refresh() { loadDir(currentPath.value === '/' ? undefined : currentPath.value); }
-
-        function select(name: string) { selected.value = name; }
-
-        function openItem(item: any) {
-            if (item.isDir) {
-                const path = currentPath.value === '/' ? '/' + item.name : currentPath.value + '/' + item.name;
-                loadDir(path);
-            } else {
-                viewFile(item.name);
-            }
-        }
-
-        async function viewFile(name: string) {
-            const params = new URLSearchParams({ file: (currentPath.value === '/' ? '' : currentPath.value) + '/' + name });
-            const wd = (window as any).defaultWorkDir;
-            if (wd) params.set('workingDirectory', wd);
+        async function load(dir?: string) {
+            loading.value = true;
+            wd = getWd();
             try {
-                const res = await fetch('/api/files/read?' + params.toString());
-                if (res.ok) {
-                    const data = await res.json();
-                    if (typeof (window as any).openFileViewer === 'function') {
-                        (window as any).openFileViewer(data.name, data.content || '');
+                console.log('[VueFB] browsing dir:', dir, 'wd:', wd);
+                const data = await API.browse(dir, wd);
+                console.log('[VueFB] data:', JSON.stringify(data).substring(0, 300));
+                path.value = data.path || '/';
+                items.value = data.items || [];
+                parentDir.value = path.value === '/' ? '' : path.value.split('/').slice(0, -1).join('/') || '/';
+                sel.value = '';
+                // Load image thumbnails
+                for (const item of items.value) {
+                    if (!item.isDir && isImage(item.name)) {
+                        const fpath = (path.value === '/' ? '' : path.value) + '/' + item.name;
+                        API.read(fpath, wd).then(d => { if (d?.image) thumbs[item.name] = d.image; });
                     }
                 }
-            } catch (e) { console.error('[VueFB] read error:', e); }
+            } catch (e) { console.error('[FB]', e); }
+            loading.value = false;
         }
 
-        function isImage(name: string) {
-            return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name);
+        function isImage(name: string) { return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name); }
+
+        function goBack() { if (parentDir.value !== undefined) load(parentDir.value); }
+
+        function open(item: any) {
+            if (item.isDir) { load((path.value === '/' ? '' : path.value) + '/' + item.name); }
+            else { doViewItem(item); }
         }
 
-        function showContext(e: MouseEvent, item: any) {
-            selected.value = item.name;
-            contextMenu.item = item;
-            contextMenu.x = e.clientX;
-            contextMenu.y = e.clientY;
-            contextMenu.visible = true;
-        }
-
-        function closeContext() { contextMenu.visible = false; }
-
-        function viewItem() {
-            if (contextMenu.item) viewFile(contextMenu.item.name);
-            closeContext();
-        }
-
-        function downloadItem() {
-            if (contextMenu.item) {
-                const path = (currentPath.value === '/' ? '' : currentPath.value) + '/' + contextMenu.item.name;
-                const wd = (window as any).defaultWorkDir;
-                const url = '/cwd' + path;
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = contextMenu.item.name;
-                a.click();
+        async function doViewItem(item: any) {
+            const fpath = (path.value === '/' ? '' : path.value) + '/' + item.name;
+            const data = await API.read(fpath, wd);
+            if (data && typeof (window as any).openFileViewer === 'function') {
+                (window as any).openFileViewer(data.name, data.content || data.image || '');
             }
-            closeContext();
         }
 
-        function renameItem() {
-            if (contextMenu.item) {
-                renameNew.value = contextMenu.item.name;
-                renaming.value = contextMenu.item.name;
-            }
-            closeContext();
+        function showCtx(e: MouseEvent, item: any) {
+            sel.value = item.name; ctx.item = item; ctx.x = e.clientX; ctx.y = e.clientY; ctx.show = true;
+        }
+        function closeCtx() { ctx.show = false; }
+
+        function doView() { if (ctx.item) doViewItem(ctx.item); closeCtx(); }
+        function doDownload() {
+            if (!ctx.item) return;
+            const fpath = (path.value === '/' ? '' : path.value) + '/' + ctx.item.name;
+            const a = document.createElement('a'); a.href = '/cwd' + fpath; a.download = ctx.item.name; a.click();
+            closeCtx();
+        }
+        function doRename() {
+            if (!ctx.item) return;
+            rename.item = ctx.item; rename.name = ctx.item.name; rename.active = true;
+            closeCtx();
+        }
+        async function confirmRename() {
+            if (!rename.item || !rename.name) return;
+            const fpath = (path.value === '/' ? '' : path.value) + '/' + rename.item.name;
+            const ok = await API.rename(fpath, rename.name, wd);
+            rename.active = false;
+            if (ok) load(path.value === '/' ? undefined : path.value);
+        }
+        async function doDelete() {
+            if (!ctx.item || !confirm('确定删除 "' + ctx.item.name + '" 吗？')) return;
+            const fpath = (path.value === '/' ? '' : path.value) + '/' + ctx.item.name;
+            const ok = await API.del(fpath, wd);
+            closeCtx();
+            if (ok) load(path.value === '/' ? undefined : path.value);
         }
 
-        async function doRename() {
-            if (!renaming.value || !renameNew.value) { renaming.value = ''; return; }
-            // Use existing file rename logic if available
-            closeContext();
-            renaming.value = '';
-            refresh();
-        }
-
-        async function deleteItem() {
-            if (!contextMenu.item) return;
-            if (!confirm('确定要删除 "' + contextMenu.item.name + '" 吗？')) return;
-            // Use existing delete logic
-            closeContext();
-            refresh();
-        }
-
-        function onGlobalClick() { closeContext(); }
-
-        onMounted(() => {
-            loadDir();
-            document.addEventListener('click', onGlobalClick);
-        });
-        onUnmounted(() => document.removeEventListener('click', onGlobalClick));
-
-        return { currentPath, items, selected, contextMenu, renaming, renameNew,
-            refresh, select, openItem, isImage, showContext, closeContext,
-            viewItem, downloadItem, renameItem, doRename, deleteItem };
+        onMounted(() => load());
+        return { path, parentDir, items, sel, loading, ctx, rename, thumbs,
+            load, goBack, open, isImage, showCtx, closeCtx, doView, doDownload, doRename, confirmRename, doDelete };
     }
 };
 
-// ========== 历史对话列表组件 ==========
-const HistoryList = {
+// ========== 历史对话列表 ==========
+const HistoryListComp = {
     name: 'HistoryList',
     template: `
-    <div class="vue-history-list">
-        <div v-for="(chat, idx) in sortedChats" :key="idx"
-            class="vue-history-item"
-            :class="{ 'vue-history-active': idx === currentIdx }"
-            @click="switchChat(idx)">
-            <div class="vue-history-title">{{ chat.title || '新对话' }}</div>
-            <div class="vue-history-preview">{{ chat.preview }}</div>
-            <div class="vue-history-time">{{ chat.time }}</div>
+    <div class="vue-hl">
+        <div v-for="(c, i) in list" :key="c.idx" class="vue-hl-item"
+            :class="{ active: c.idx === cur }" @click="sw(c.idx)">
+            <div class="vue-hl-t">{{ c.title }}</div>
+            <div class="vue-hl-p">{{ c.prev }}</div>
         </div>
-        <div v-if="sortedChats.length === 0" class="vue-history-empty">暂无对话</div>
+        <div v-if="list.length === 0" class="vue-hl-empty">暂无对话</div>
     </div>`,
     setup() {
-        const chats = ref<any[]>([]);
-        const currentIdx = ref(0);
-        let pollTimer: any = null;
+        const list = ref<any[]>([]);
+        const cur = ref(0);
+        let timer: any;
 
-        function update() {
+        function refresh() {
             const g = window as any;
-            if (g.chats && g.chatTitles && g.chatTokens) {
-                const now = Date.now();
-                const list: any[] = [];
-                for (let i = 0; i < g.chats.length; i++) {
-                    const msgs = g.chats[i] || [];
-                    // Find last activity time (from message timestamps or indices)
-                    let lastActive = 0;
-                    let preview = '';
-                    for (let j = msgs.length - 1; j >= 0; j--) {
-                        const m = msgs[j];
-                        if (m.content) {
-                            if (!preview) preview = m.content.substring(0, 60);
-                            if (!lastActive) lastActive = j;
-                        }
+            if (!g.chats) return;
+            const items: any[] = [];
+            for (let i = 0; i < g.chats.length; i++) {
+                const msgs = g.chats[i] || [];
+                let last = 0, prev = '';
+                for (let j = msgs.length - 1; j >= 0; j--) {
+                    const m = msgs[j];
+                    if (m?.content) {
+                        if (!prev) prev = m.content.substring(0, 80);
+                        if (!last) last = j;
                     }
-                    list.push({
-                        index: i,
-                        title: g.chatTitles[i] || '新对话',
-                        preview: preview || '空对话',
-                        time: lastActive ? lastActive.toString() : '0',
-                        sortKey: lastActive || i
-                    });
                 }
-                // Sort by last activity (descending)
-                list.sort((a, b) => b.sortKey - a.sortKey);
-                chats.value = list;
-                currentIdx.value = g.currentChat !== undefined ? g.currentChat : 0;
+                items.push({ idx: i, title: g.chatTitles?.[i] || '新对话', prev: prev || '', sort: last || i });
             }
+            items.sort((a, b) => b.sort - a.sort);
+            list.value = items;
+            cur.value = g.currentChat ?? 0;
         }
 
-        function switchChat(idx: number) {
-            const realIdx = chats.value[idx]?.index;
-            if (realIdx !== undefined) {
-                const g = window as any;
-                if (typeof g.switchChat === 'function') {
-                    g.switchChat(realIdx);
-                }
-            }
+        function sw(idx: number) {
+            const g = window as any;
+            if (typeof g.switchChat === 'function') g.switchChat(idx);
         }
 
-        onMounted(() => {
-            update();
-            pollTimer = setInterval(update, 2000);
-        });
-        onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
-
-        const sortedChats = computed(() => chats.value);
-
-        return { sortedChats, currentIdx, switchChat };
+        onMounted(() => { refresh(); timer = setInterval(refresh, 1500); });
+        onUnmounted(() => clearInterval(timer));
+        return { list, cur, sw };
     }
 };
 
-// ========== 启动 ==========
+// ========== 启动 Vue 应用 ==========
+function mountFB() {
+    let el = document.getElementById('vue-fb-container');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'vue-fb-container';
+        el.style.cssText = 'display:none;flex-direction:column;flex:1;overflow:hidden;';
+        const panel = document.getElementById('filesPanel');
+        const body = document.getElementById('filesPanelBody');
+        if (panel) panel.insertBefore(el, body);
+    }
+    if (el.hasAttribute('data-vue-fb')) return;
+    console.log('[Vue] Mounting file browser...');
+    el.setAttribute('data-vue-fb', '1');
+    el.style.display = 'flex';
+    const old = document.getElementById('filesPanelBody');
+    if (old) old.style.display = 'none';
+    createApp(FileBrowserComp).mount(el);
+    console.log('[Vue] File browser mounted');
+}
+
+function mountHL() {
+    const parent = document.getElementById('chatHistoryList')?.parentElement;
+    if (!parent || parent.hasAttribute('data-vue-hl')) return;
+    console.log('[Vue] Mounting history list...');
+    parent.setAttribute('data-vue-hl', '1');
+    const old = document.getElementById('chatHistoryList');
+    if (old) old.style.display = 'none';
+    const el = document.createElement('div');
+    parent.appendChild(el);
+    createApp(HistoryListComp).mount(el);
+    console.log('[Vue] History list mounted');
+}
+
 export function initVueApps() {
-    // 文件浏览器
-    const fbEl = document.getElementById('vue-file-browser');
-    if (fbEl) {
-        const fbApp = createApp(FileBrowser);
-        fbApp.mount(fbEl);
-    }
-
-    // 历史对话列表
-    const hlEl = document.getElementById('vue-history-list');
-    if (hlEl) {
-        const hlApp = createApp(HistoryList);
-        hlApp.mount(hlEl);
+    console.log('[Vue] Initializing...');
+    mountHL();
+    const panel = document.getElementById('filesPanel');
+    if (panel && panel.classList.contains('active')) mountFB();
+    if (panel) {
+        new MutationObserver(() => {
+            if (panel.classList.contains('active')) mountFB();
+        }).observe(panel, { attributes: true, attributeFilter: ['class'] });
     }
 }
 
-// 自动初始化
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => initVueApps());
-} else {
-    initVueApps();
-}
+// Auto init
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initVueApps());
+else setTimeout(initVueApps, 300);
