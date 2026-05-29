@@ -158,9 +158,6 @@ window.showToast = function(msg) {
     }
 
     var configPrompts = { think_modes: {} };
-    async function loadConfigPrompts() {
-        try { const r = await fetch('/api/config/prompts.json'); if (r.ok) configPrompts = await r.json(); } catch (e) {}
-    }
     function getReasonSteps() { return configPrompts.think_modes?.[currentThinkMode]?.steps || []; }
 
     function escapeHtml(text) {
@@ -2454,7 +2451,6 @@ window.showToast = function(msg) {
         delete window.__CHAT_TOKEN__;
         await loadProviders();
         await loadConfigFromBackend();
-        await loadConfigPrompts();
         await loadChatsFromBackend(embeddedToken);
         loadUsageStats();
         updateModelButtonLabels();

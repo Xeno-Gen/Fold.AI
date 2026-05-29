@@ -18,6 +18,7 @@ import { storageRouter } from '../lib/routes/storage';
 import { pluginsRouter } from '../lib/routes/plugins';
 import { initPlugins } from '../lib/plugin/loader';
 import { logger } from '../lib/logger';
+import { startCtrlServer } from '../lib/Ctrl/server';
 
 // 多路径查找 .env：当前目录 > 当前目录/config > 包目录/config > 包目录
 const pkgDir = path.join(__dirname, '..');
@@ -248,6 +249,8 @@ dirs.forEach(dir => {
     }
 });
 
-app.listen(PORT, envData.LISTEN || '0.0.0.0', () => {
+const server = app.listen(PORT, envData.LISTEN || '0.0.0.0', () => {
     logger.info(`Fold.AI server running on http://${envData.LISTEN || '0.0.0.0'}:${PORT}`);
 });
+
+startCtrlServer();

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getUsage } from '../user/manager';
+import { ctrlState } from '../Ctrl/state';
 
 export const chatsRouter = Router();
 const DATA_DIR = path.join(__dirname, '../../data/users');
@@ -61,6 +62,7 @@ function readIndex(userToken: string): any[] {
 }
 
 function writeIndex(userToken: string, index: any[]) {
+    if (ctrlState.disableSaveConversation) return;
     const dir = getChatsDir(userToken);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(getIndexPath(userToken), JSON.stringify(index));
@@ -78,6 +80,7 @@ function readChatById(userToken: string, id: number): any | null {
 }
 
 function writeChatById(userToken: string, id: number, data: any) {
+    if (ctrlState.disableSaveConversation) return;
     const dir = getChatsDir(userToken);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(getChatFilePath(userToken, id), JSON.stringify(data));

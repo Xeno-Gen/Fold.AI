@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { ctrlState } from '../Ctrl/state';
 
 const uploadDir = path.join(__dirname, '../../data/uploads');
 const storage = multer.diskStorage({
@@ -19,6 +20,9 @@ export const uploadRouter = Router();
 
 uploadRouter.post('/upload', upload.single('file'), (req: Request, res: Response) => {
     try {
+        if (ctrlState.disableFileUpload) {
+            return res.status(503).json({ error: '文件上传已由管理员关闭' });
+        }
         const file = req.file;
         if (!file) return res.status(400).json({ error: '没有文件' });
 

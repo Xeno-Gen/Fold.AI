@@ -1,28 +1,10 @@
 "use strict";
-var VueApp = (() => {
+var CtrlApp = (() => {
   var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
   };
-  var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
-      for (let key of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-    }
-    return to;
-  };
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // static/vue/app.ts
-  var app_exports = {};
-  __export(app_exports, {
-    initVueApps: () => initVueApps
-  });
 
   // node_modules/@vue/runtime-dom/dist/runtime-dom.esm-bundler.js
   var runtime_dom_esm_bundler_exports = {};
@@ -926,30 +908,30 @@ var VueApp = (() => {
     }
     return false;
   }
-  function refreshComputed(computed4) {
-    if (computed4.flags & 4 && !(computed4.flags & 16)) {
+  function refreshComputed(computed3) {
+    if (computed3.flags & 4 && !(computed3.flags & 16)) {
       return;
     }
-    computed4.flags &= -17;
-    if (computed4.globalVersion === globalVersion) {
+    computed3.flags &= -17;
+    if (computed3.globalVersion === globalVersion) {
       return;
     }
-    computed4.globalVersion = globalVersion;
-    if (!computed4.isSSR && computed4.flags & 128 && (!computed4.deps && !computed4._dirty || !isDirty(computed4))) {
+    computed3.globalVersion = globalVersion;
+    if (!computed3.isSSR && computed3.flags & 128 && (!computed3.deps && !computed3._dirty || !isDirty(computed3))) {
       return;
     }
-    computed4.flags |= 2;
-    const dep = computed4.dep;
+    computed3.flags |= 2;
+    const dep = computed3.dep;
     const prevSub = activeSub;
     const prevShouldTrack = shouldTrack;
-    activeSub = computed4;
+    activeSub = computed3;
     shouldTrack = true;
     try {
-      prepareDeps(computed4);
-      const value = computed4.fn(computed4._value);
-      if (dep.version === 0 || hasChanged(value, computed4._value)) {
-        computed4.flags |= 128;
-        computed4._value = value;
+      prepareDeps(computed3);
+      const value = computed3.fn(computed3._value);
+      if (dep.version === 0 || hasChanged(value, computed3._value)) {
+        computed3.flags |= 128;
+        computed3._value = value;
         dep.version++;
       }
     } catch (err) {
@@ -958,8 +940,8 @@ var VueApp = (() => {
     } finally {
       activeSub = prevSub;
       shouldTrack = prevShouldTrack;
-      cleanupDeps(computed4);
-      computed4.flags &= -3;
+      cleanupDeps(computed3);
+      computed3.flags &= -3;
     }
   }
   function removeSub(link, soft = false) {
@@ -1054,8 +1036,8 @@ var VueApp = (() => {
   };
   var Dep = class {
     // TODO isolatedDeclarations "__v_skip"
-    constructor(computed4) {
-      this.computed = computed4;
+    constructor(computed3) {
+      this.computed = computed3;
       this.version = 0;
       this.activeLink = void 0;
       this.subs = void 0;
@@ -1147,10 +1129,10 @@ var VueApp = (() => {
   function addSub(link) {
     link.dep.sc++;
     if (link.sub.flags & 4) {
-      const computed4 = link.dep.computed;
-      if (computed4 && !link.dep.subs) {
-        computed4.flags |= 4 | 16;
-        for (let l = computed4.deps; l; l = l.nextDep) {
+      const computed3 = link.dep.computed;
+      if (computed3 && !link.dep.subs) {
+        computed3.flags |= 4 | 16;
+        for (let l = computed3.deps; l; l = l.nextDep) {
           addSub(l);
         }
       }
@@ -10975,9 +10957,9 @@ Component that was made reactive: `,
       if (instance.data !== EMPTY_OBJ) {
         blocks.push(createInstanceBlock("data", toRaw(instance.data)));
       }
-      const computed4 = extractKeys(instance, "computed");
-      if (computed4) {
-        blocks.push(createInstanceBlock("computed", computed4));
+      const computed3 = extractKeys(instance, "computed");
+      if (computed3) {
+        blocks.push(createInstanceBlock("computed", computed3));
       }
       const injected = extractKeys(instance, "inject");
       if (injected) {
@@ -19118,299 +19100,188 @@ ${codeFrame}` : message);
   }
   registerRuntimeCompiler(compileToFunction);
 
-  // static/vue/app.ts
-  var API = {
-    async browse(dir, wd) {
-      const p2 = new URLSearchParams();
-      if (dir) p2.set("dir", dir);
-      if (wd) p2.set("workingDirectory", wd);
-      const r = await fetch("/api/files/browse?" + p2.toString());
-      return r.ok ? r.json() : { items: [] };
-    },
-    async read(file, wd) {
-      const p2 = new URLSearchParams({ file });
-      if (wd) p2.set("workingDirectory", wd);
-      const r = await fetch("/api/files/read?" + p2.toString());
+  // static/ctrl/app.ts
+  var api = {
+    async getState() {
+      const r = await fetch("/api/state");
       return r.ok ? r.json() : null;
     },
-    async del(file, wd) {
-      const p2 = new URLSearchParams({ file });
-      if (wd) p2.set("workingDirectory", wd);
-      const r = await fetch("/api/files/delete?" + p2.toString(), { method: "DELETE" });
-      return r.ok;
-    },
-    async rename(file, newName, wd) {
-      const p2 = new URLSearchParams();
-      if (wd) p2.set("workingDirectory", wd);
-      const r = await fetch("/api/files/rename?" + p2.toString(), {
+    async setState(data) {
+      const r = await fetch("/api/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file, newName })
+        body: JSON.stringify(data)
       });
-      return r.ok;
+      return r.ok ? r.json() : null;
+    },
+    async getUsers() {
+      const r = await fetch("/api/users");
+      return r.ok ? r.json() : { users: [] };
+    },
+    async deleteUser(token) {
+      const r = await fetch("/api/user/" + encodeURIComponent(token), { method: "DELETE" });
+      return r.ok ? r.json() : null;
     }
   };
-  var FileBrowserComp = {
-    name: "FileBrowser",
+  var CtrlApp = {
+    name: "CtrlPanel",
     template: `
-    <div class="vue-fb">
-        <div class="vue-fb-toolbar">
-            <button class="vue-fb-back" @click="goBack" :disabled="!parentDir">\u2190</button>
-            <span class="vue-fb-path">{{ path }}</span>
-            <button class="vue-fb-btn" @click="load">\u27F3</button>
+  <div class="ctrl-panel">
+    <div class="ctrl-panel-header">
+      <h2>\u63A7\u5236\u9762\u677F</h2>
+    </div>
+    <div class="ctrl-panel-body">
+
+      <div class="settings-item">
+        <div class="settings-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          <div><div>\u5173\u95ED\u6587\u4EF6\u4E0A\u4F20</div><div class="desc">\u7981\u6B62\u7528\u6237\u4E0A\u4F20\u6587\u4EF6\u5230\u670D\u52A1\u5668</div></div>
         </div>
-        <div class="vue-fb-grid" @contextmenu.prevent="closeCtx" @click="closeCtx">
-            <div v-for="item in items" :key="item.name" class="vue-fb-item"
-                :class="{ selected: sel === item.name }"
-                @click="sel = item.name"
-                @dblclick="open(item)"
-                @contextmenu.prevent.stop="showCtx($event, item)">
-                <div class="vue-fb-icon">
-                    <img v-if="isImage(item.name) && thumbs[item.name]" :src="thumbs[item.name]" class="vue-fb-thumb">
-                    <span v-else-if="item.isDir" class="vue-fb-ico">\u{1F4C1}</span>
-                    <span v-else class="vue-fb-ico">\u{1F4C4}</span>
-                </div>
-                <div class="vue-fb-lbl">{{ item.name }}</div>
-            </div>
-            <div v-if="!loading && items.length === 0" class="vue-fb-empty">\u7A7A\u76EE\u5F55</div>
-            <div v-if="loading" class="vue-fb-empty">\u52A0\u8F7D\u4E2D...</div>
+        <div class="tool-chain-toggle">
+          <button class="tool-chain-option" :class="{ active: !disableFileUpload }" @click="setUpload(false)">\u5173\u95ED</button>
+          <button class="tool-chain-option" :class="{ active: disableFileUpload }" @click="setUpload(true)">\u5F00\u542F</button>
         </div>
-        <div v-if="ctx.show" class="vue-fb-ctx" :style="{ left: ctx.x+'px', top: ctx.y+'px' }">
-            <div class="vue-fb-ctx-i" @click="doView">\u67E5\u770B</div>
-            <div class="vue-fb-ctx-i" @click="doRename">\u91CD\u547D\u540D</div>
-            <div class="vue-fb-ctx-i" @click="doDownload">\u4E0B\u8F7D</div>
-            <div class="vue-fb-ctx-div"></div>
-            <div class="vue-fb-ctx-i vue-fb-ctx-danger" @click="doDelete">\u5220\u9664</div>
+      </div>
+
+      <div class="settings-item">
+        <div class="settings-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <div><div>\u4E0D\u4FDD\u5B58\u7528\u6237\u5BF9\u8BDD</div><div class="desc">\u4E0D\u5728 data \u6587\u4EF6\u5939\u5185\u4FDD\u5B58\u5BF9\u8BDD\u8BB0\u5F55</div></div>
         </div>
-        <div v-if="rename.active" class="vue-fb-overlay" @click.self="rename.active=false">
-            <div class="vue-fb-dlg">
-                <div class="vue-fb-dlg-title">\u91CD\u547D\u540D</div>
-                <input v-model="rename.name" @keyup.enter="confirmRename" @keyup.escape="rename.active=false" class="vue-fb-input">
-                <div class="vue-fb-dlg-acts">
-                    <button class="vue-fb-btn-p" @click="confirmRename">\u786E\u5B9A</button>
-                    <button class="vue-fb-btn-s" @click="rename.active=false">\u53D6\u6D88</button>
-                </div>
-            </div>
+        <div class="tool-chain-toggle">
+          <button class="tool-chain-option" :class="{ active: !disableSaveConversation }" @click="setSave(false)">\u5173\u95ED</button>
+          <button class="tool-chain-option" :class="{ active: disableSaveConversation }" @click="setSave(true)">\u5F00\u542F</button>
         </div>
-    </div>`,
+      </div>
+
+      <div class="settings-item">
+        <div class="settings-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+          <div><div>\u7981\u7528\u6240\u6709\u63D2\u4EF6</div><div class="desc">\u524D\u7AEF\u63D2\u4EF6\u5173\u95ED\uFF0C\u540E\u7AEF\u4E5F\u4E0D\u6267\u884C\u63D2\u4EF6</div></div>
+        </div>
+        <div class="tool-chain-toggle">
+          <button class="tool-chain-option" :class="{ active: !disableAllPlugins }" @click="setPlugins(false)">\u5173\u95ED</button>
+          <button class="tool-chain-option" :class="{ active: disableAllPlugins }" @click="setPlugins(true)">\u5F00\u542F</button>
+        </div>
+      </div>
+
+      <div class="settings-item" style="border-top:1px solid #f0efeb;margin-top:4px;padding-top:14px;">
+        <div class="settings-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <div><div>\u5220\u9664\u7528\u6237</div><div class="desc">\u5220\u9664\u6307\u5B9A\u7528\u6237\u7684\u5168\u90E8\u6570\u636E</div></div>
+        </div>
+        <button class="action-btn danger" @click="openDeleteDialog">\u5220\u9664</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="snackbar" :style="{ opacity: snackbarVisible ? 1 : 0 }">{{ snackbarMsg }}</div>
+
+  <div class="dialog-overlay" v-if="showDeleteDialog" @click.self="showDeleteDialog = false">
+    <div class="dialog-card">
+      <h3>\u5220\u9664\u7528\u6237\u6570\u636E</h3>
+      <p style="font-size:13px;color:#666;margin-bottom:12px;">\u9009\u62E9\u8981\u5220\u9664\u7684\u7528\u6237\uFF0C\u6B64\u64CD\u4F5C\u4E0D\u53EF\u6062\u590D\u3002</p>
+      <select v-model="selectedUserToken" v-if="userList.length > 0">
+        <option value="" disabled>\u8BF7\u9009\u62E9\u7528\u6237</option>
+        <option v-for="u in userList" :key="u.token" :value="u.token">{{ u.label }}</option>
+      </select>
+      <p v-else style="font-size:13px;color:#999;margin-bottom:12px;">\u6682\u65E0\u7528\u6237\u6570\u636E</p>
+      <div class="dialog-actions">
+        <button class="cancel" @click="showDeleteDialog = false">\u53D6\u6D88</button>
+        <button class="confirm-delete" :disabled="!selectedUserToken" @click="confirmDeleteUser">\u786E\u8BA4\u5220\u9664</button>
+      </div>
+    </div>
+  </div>
+  `,
     setup() {
-      const path = ref("/");
-      const parentDir = ref("");
-      const items = ref([]);
-      const sel = ref("");
-      const loading = ref(false);
-      const ctx = reactive({ show: false, x: 0, y: 0, item: null });
-      const rename = reactive({ active: false, name: "", item: null });
-      const thumbs = reactive({});
-      let wd = "";
-      function getWd() {
-        const g = window;
-        return g.defaultWorkDir || g.CommandExecutionPlugin?.workingDirectory || "cwd";
+      const disableFileUpload = ref(false);
+      const disableSaveConversation = ref(false);
+      const disableAllPlugins = ref(false);
+      const snackbarMsg = ref("");
+      const snackbarVisible = ref(false);
+      const showDeleteDialog = ref(false);
+      const userList = ref([]);
+      const selectedUserToken = ref("");
+      let snackbarTimer = null;
+      function showSnackbar(msg) {
+        snackbarMsg.value = msg;
+        snackbarVisible.value = true;
+        if (snackbarTimer) clearTimeout(snackbarTimer);
+        snackbarTimer = setTimeout(() => {
+          snackbarVisible.value = false;
+        }, 2500);
       }
-      async function load(dir) {
-        loading.value = true;
-        wd = getWd();
-        try {
-          console.log("[VueFB] browsing dir:", dir, "wd:", wd);
-          const data = await API.browse(dir, wd);
-          console.log("[VueFB] data:", JSON.stringify(data).substring(0, 300));
-          path.value = data.path || "/";
-          items.value = data.items || [];
-          parentDir.value = path.value === "/" ? "" : path.value.split("/").slice(0, -1).join("/") || "/";
-          sel.value = "";
-          for (const item of items.value) {
-            if (!item.isDir && isImage(item.name)) {
-              const fpath = (path.value === "/" ? "" : path.value) + "/" + item.name;
-              API.read(fpath, wd).then((d) => {
-                if (d?.image) thumbs[item.name] = d.image;
-              });
-            }
-          }
-        } catch (e) {
-          console.error("[FB]", e);
+      let syncTimer = null;
+      function debouncedSync() {
+        if (syncTimer) clearTimeout(syncTimer);
+        syncTimer = setTimeout(async () => {
+          const result = await api.setState({
+            disableFileUpload: disableFileUpload.value,
+            disableSaveConversation: disableSaveConversation.value,
+            disableAllPlugins: disableAllPlugins.value
+          });
+          if (result?.success) showSnackbar("\u72B6\u6001\u5DF2\u66F4\u65B0");
+        }, 300);
+      }
+      async function loadState() {
+        const state = await api.getState();
+        if (state) {
+          disableFileUpload.value = !!state.disableFileUpload;
+          disableSaveConversation.value = !!state.disableSaveConversation;
+          disableAllPlugins.value = !!state.disableAllPlugins;
         }
-        loading.value = false;
       }
-      function isImage(name) {
-        return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name);
+      function setUpload(val) {
+        disableFileUpload.value = val;
+        debouncedSync();
       }
-      function goBack() {
-        if (parentDir.value !== void 0) load(parentDir.value);
+      function setSave(val) {
+        disableSaveConversation.value = val;
+        debouncedSync();
       }
-      function open(item) {
-        if (item.isDir) {
-          load((path.value === "/" ? "" : path.value) + "/" + item.name);
+      function setPlugins(val) {
+        disableAllPlugins.value = val;
+        debouncedSync();
+      }
+      async function openDeleteDialog() {
+        showDeleteDialog.value = true;
+        selectedUserToken.value = "";
+        const data = await api.getUsers();
+        userList.value = data.users || [];
+      }
+      async function confirmDeleteUser() {
+        if (!selectedUserToken.value) return;
+        const result = await api.deleteUser(selectedUserToken.value);
+        if (result?.success) {
+          showSnackbar("\u7528\u6237\u5DF2\u5220\u9664");
+          showDeleteDialog.value = false;
+          userList.value = userList.value.filter((u) => u.token !== selectedUserToken.value);
         } else {
-          doViewItem(item);
+          showSnackbar("\u5220\u9664\u5931\u8D25");
         }
       }
-      async function doViewItem(item) {
-        const fpath = (path.value === "/" ? "" : path.value) + "/" + item.name;
-        const data = await API.read(fpath, wd);
-        if (data && typeof window.openFileViewer === "function") {
-          window.openFileViewer(data.name, data.content || data.image || "");
-        }
-      }
-      function showCtx(e, item) {
-        sel.value = item.name;
-        ctx.item = item;
-        ctx.x = e.clientX;
-        ctx.y = e.clientY;
-        ctx.show = true;
-      }
-      function closeCtx() {
-        ctx.show = false;
-      }
-      function doView() {
-        if (ctx.item) doViewItem(ctx.item);
-        closeCtx();
-      }
-      function doDownload() {
-        if (!ctx.item) return;
-        const fpath = (path.value === "/" ? "" : path.value) + "/" + ctx.item.name;
-        const a = document.createElement("a");
-        a.href = "/cwd" + fpath;
-        a.download = ctx.item.name;
-        a.click();
-        closeCtx();
-      }
-      function doRename() {
-        if (!ctx.item) return;
-        rename.item = ctx.item;
-        rename.name = ctx.item.name;
-        rename.active = true;
-        closeCtx();
-      }
-      async function confirmRename() {
-        if (!rename.item || !rename.name) return;
-        const fpath = (path.value === "/" ? "" : path.value) + "/" + rename.item.name;
-        const ok = await API.rename(fpath, rename.name, wd);
-        rename.active = false;
-        if (ok) load(path.value === "/" ? void 0 : path.value);
-      }
-      async function doDelete() {
-        if (!ctx.item || !confirm('\u786E\u5B9A\u5220\u9664 "' + ctx.item.name + '" \u5417\uFF1F')) return;
-        const fpath = (path.value === "/" ? "" : path.value) + "/" + ctx.item.name;
-        const ok = await API.del(fpath, wd);
-        closeCtx();
-        if (ok) load(path.value === "/" ? void 0 : path.value);
-      }
-      onMounted(() => load());
+      onMounted(() => {
+        loadState();
+      });
       return {
-        path,
-        parentDir,
-        items,
-        sel,
-        loading,
-        ctx,
-        rename,
-        thumbs,
-        load,
-        goBack,
-        open,
-        isImage,
-        showCtx,
-        closeCtx,
-        doView,
-        doDownload,
-        doRename,
-        confirmRename,
-        doDelete
+        disableFileUpload,
+        disableSaveConversation,
+        disableAllPlugins,
+        snackbarMsg,
+        snackbarVisible,
+        showDeleteDialog,
+        userList,
+        selectedUserToken,
+        setUpload,
+        setSave,
+        setPlugins,
+        openDeleteDialog,
+        confirmDeleteUser
       };
     }
   };
-  var HistoryListComp = {
-    name: "HistoryList",
-    template: `
-    <div class="vue-hl">
-        <div v-for="(c, i) in list" :key="c.idx" class="vue-hl-item"
-            :class="{ active: c.idx === cur }" @click="sw(c.idx)">
-            <div class="vue-hl-t">{{ c.title }}</div>
-            <div class="vue-hl-p">{{ c.prev }}</div>
-        </div>
-        <div v-if="list.length === 0" class="vue-hl-empty">\u6682\u65E0\u5BF9\u8BDD</div>
-    </div>`,
-    setup() {
-      const list = ref([]);
-      const cur = ref(0);
-      let timer;
-      function refresh() {
-        const g = window;
-        if (!g.chats) return;
-        const items = [];
-        for (let i = 0; i < g.chats.length; i++) {
-          const msgs = g.chats[i] || [];
-          let last = 0, prev = "";
-          for (let j = msgs.length - 1; j >= 0; j--) {
-            const m = msgs[j];
-            if (m?.content) {
-              if (!prev) prev = m.content.substring(0, 80);
-              if (!last) last = j;
-            }
-          }
-          items.push({ idx: i, title: g.chatTitles?.[i] || "\u65B0\u5BF9\u8BDD", prev: prev || "", sort: last || i });
-        }
-        items.sort((a, b) => b.sort - a.sort);
-        list.value = items;
-        cur.value = g.currentChat ?? 0;
-      }
-      function sw(idx) {
-        const g = window;
-        if (typeof g.switchChat === "function") g.switchChat(idx);
-      }
-      onMounted(() => {
-        refresh();
-        timer = setInterval(refresh, 1500);
-      });
-      onUnmounted(() => clearInterval(timer));
-      return { list, cur, sw };
-    }
-  };
-  function mountFB() {
-    let el = document.getElementById("vue-fb-container");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "vue-fb-container";
-      el.style.cssText = "display:none;flex-direction:column;flex:1;overflow:hidden;";
-      const panel = document.getElementById("filesPanel");
-      const body = document.getElementById("filesPanelBody");
-      if (panel) panel.insertBefore(el, body);
-    }
-    if (el.hasAttribute("data-vue-fb")) return;
-    console.log("[Vue] Mounting file browser...");
-    el.setAttribute("data-vue-fb", "1");
-    el.style.display = "flex";
-    const old = document.getElementById("filesPanelBody");
-    if (old) old.style.display = "none";
-    createApp(FileBrowserComp).mount(el);
-    console.log("[Vue] File browser mounted");
-  }
-  function mountHL() {
-    const parent = document.getElementById("chatHistoryList")?.parentElement;
-    if (!parent || parent.hasAttribute("data-vue-hl")) return;
-    console.log("[Vue] Mounting history list...");
-    parent.setAttribute("data-vue-hl", "1");
-    const old = document.getElementById("chatHistoryList");
-    if (old) old.style.display = "none";
-    const el = document.createElement("div");
-    parent.appendChild(el);
-    createApp(HistoryListComp).mount(el);
-    console.log("[Vue] History list mounted");
-  }
-  function initVueApps() {
-    console.log("[Vue] Initializing...");
-    mountHL();
-    const panel = document.getElementById("filesPanel");
-    if (panel && panel.classList.contains("active")) mountFB();
-    if (panel) {
-      new MutationObserver(() => {
-        if (panel.classList.contains("active")) mountFB();
-      }).observe(panel, { attributes: true, attributeFilter: ["class"] });
-    }
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => initVueApps());
-  else setTimeout(initVueApps, 300);
-  return __toCommonJS(app_exports);
+  createApp(CtrlApp).mount("#ctrl-app");
 })();
 /*! Bundled license information:
 

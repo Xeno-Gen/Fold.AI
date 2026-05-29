@@ -2,8 +2,17 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { logger } from '../logger';
+import { ctrlState } from '../Ctrl/state';
 
 export const pluginsRouter = Router();
+
+// Middleware: block plugin execution when disabled by control panel
+pluginsRouter.use((req, res, next) => {
+  if (ctrlState.disableAllPlugins && req.method !== 'GET') {
+    return res.status(503).json({ error: '插件已由管理员禁用' });
+  }
+  next();
+});
 
 const PLUGIN_DIR = path.join(__dirname, '../../Plugin');
 const CONFIG_DIR = path.join(__dirname, '../../config');
