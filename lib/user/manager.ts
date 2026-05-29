@@ -38,6 +38,7 @@ export interface UserConfig {
     systemPrompt: string;
     chatFormat: string;
     pureMode: boolean;
+    promptLang: string;
 }
 
 function ensureUserDir(userToken: string) {
@@ -65,6 +66,7 @@ function ensureUserDir(userToken: string) {
             systemPrompt: defaultSystemPrompt,
             chatFormat: '',
             pureMode: false,
+            promptLang: 'zh',
         };
         fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
     }
@@ -80,6 +82,7 @@ export function getUserConfig(userToken: string): UserConfig {
         if (data.systemPrompt === undefined) data.systemPrompt = '';
         if (data.chatFormat === undefined) data.chatFormat = '';
         if (data.pureMode === undefined) data.pureMode = false;
+        if (data.promptLang === undefined) data.promptLang = 'zh';
         for (const key of Object.keys(data.providerKeys)) {
             if (typeof data.providerKeys[key] === 'string') {
                 data.providerKeys[key] = [data.providerKeys[key]];

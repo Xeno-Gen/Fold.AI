@@ -23,7 +23,8 @@
     "dev": "ts-node bin/server.ts",
     "prepublishOnly": "npm run build",
     "build-vue": "esbuild static/vue/app.ts --bundle --outfile=static/vue/app.js --format=iife --global-name=VueApp --alias:vue=vue/dist/vue.esm-bundler.js --define:__VUE_OPTIONS_API__=true --define:__VUE_PROD_DEVTOOLS__=false --define:__VUE_PROD_HYDRATION_MISMATCH_DETAILS__=false",
-    "build-vue-ctrl": "esbuild static/ctrl/app.ts --bundle --outfile=static/ctrl/app.js --format=iife --global-name=CtrlApp --alias:vue=vue/dist/vue.esm-bundler.js --define:__VUE_OPTIONS_API__=true --define:__VUE_PROD_DEVTOOLS__=false --define:__VUE_PROD_HYDRATION_MISMATCH_DETAILS__=false"
+    "build-vue-ctrl": "esbuild static/ctrl/app.ts --bundle --outfile=static/ctrl/app.js --format=iife --global-name=CtrlApp --alias:vue=vue/dist/vue.esm-bundler.js --define:__VUE_OPTIONS_API__=true --define:__VUE_PROD_DEVTOOLS__=false --define:__VUE_PROD_HYDRATION_MISMATCH_DETAILS__=false",
+    "build-vue-main": "esbuild static/vue/app.ts --bundle --outfile=static/vue/app.js --format=iife --global-name=MainApp --alias:vue=vue/dist/vue.esm-bundler.js --define:__VUE_OPTIONS_API__=true --define:__VUE_PROD_DEVTOOLS__=false --define:__VUE_PROD_HYDRATION_MISMATCH_DETAILS__=false"
   },
   "keywords": [
     "ai",

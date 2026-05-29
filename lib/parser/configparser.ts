@@ -3,11 +3,23 @@ import path from 'path';
 
 const CONFIG_DIR = path.join(__dirname, '../../Config');
 
+function getLangBase(lang?: string): string {
+    if (lang === 'en') {
+        const enDir = path.join(CONFIG_DIR, 'En');
+        if (fs.existsSync(enDir)) return enDir;
+    }
+    // Default to Chinese
+    const zhDir = path.join(CONFIG_DIR, 'Zh');
+    if (fs.existsSync(zhDir)) return zhDir;
+    return CONFIG_DIR;
+}
+
 /**
- * 从 config/prompts/ 目录读取 .md 文件，按文件名排序拼接为系统提示词
+ * 从 config/Zh/prompts/ 或 config/En/prompts/ 目录读取 .md 文件，按文件名排序拼接
+ * @param lang 语言代码：'zh' 或 'en'，默认 'zh'
  */
-export function getSystemPrompt(): string {
-    const promptsDir = path.join(CONFIG_DIR, 'prompts');
+export function getSystemPrompt(lang?: string): string {
+    const promptsDir = path.join(getLangBase(lang), 'prompts');
     if (!fs.existsSync(promptsDir)) return '';
     const files = fs.readdirSync(promptsDir)
         .filter(f => f.endsWith('.md'))
@@ -18,11 +30,13 @@ export function getSystemPrompt(): string {
 }
 
 /**
- * 从 config/Plugin/ 目录读取 .md 文件，返回键值对 { 文件名: 内容 }
+ * 从 config/Zh|En/Plugin/、config/Zh|En/guidelines/ 目录读取 .md 文件
+ * @param lang 语言代码：'zh' 或 'en'，默认 'zh'
  */
-export function getPluginPrompts(): Record<string, string> {
-    const pluginDir = path.join(CONFIG_DIR, 'Plugin');
-    const guidelineDir = path.join(CONFIG_DIR, 'guidelines');
+export function getPluginPrompts(lang?: string): Record<string, string> {
+    const baseDir = getLangBase(lang);
+    const pluginDir = path.join(baseDir, 'Plugin');
+    const guidelineDir = path.join(baseDir, 'guidelines');
     const result: Record<string, string> = {};
     if (fs.existsSync(pluginDir)) {
         for (const f of fs.readdirSync(pluginDir).filter(f => f.endsWith('.md'))) {

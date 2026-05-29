@@ -89,7 +89,7 @@
             chats[currentChat].push(execMsg);
             try {
                 var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir;
-                var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true }) });
+                var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true, requestId: currentRequestId }) });
                 var sysMsg;
                 var resultTitle, resultBody;
                 if (res.ok) {
@@ -318,26 +318,29 @@
 
         // 如果是开幕输入框首次发送，创建对话并确认到后端
         if (fromCenter) {
-            await newChat(true);
+            var newToken = generateToken();
+            var newId = chats.length;
+            chats.push([]);
+            chatTitles.push('');
+            chatTokens.push(newToken);
+            currentChat = newId;
             if (!isChatActive) activateChat(true);
-            if (pendingNewChatIndex !== null && currentChat === pendingNewChatIndex) {
-                try {
-                    var res = await fetch('/api/chats', { method: 'POST' });
-                    if (res.ok) {
-                        var data = await res.json();
-                        var realId = data.id;
-                        var savedToken = chatTokens[pendingNewChatIndex] || generateToken();
-                        chats.splice(pendingNewChatIndex, 1);
-                        chatTitles.splice(pendingNewChatIndex, 1);
-                        chatTokens.splice(pendingNewChatIndex, 1);
-                        while (chats.length <= realId) { chats.push([]); chatTitles.push(''); chatTokens.push(''); }
-                        chats[realId] = []; chatTitles[realId] = _('newChat'); chatTokens[realId] = data.token || savedToken;
-                        currentChat = realId;
-                        pendingNewChatIndex = null;
-                        updateUrlWithToken();
-                    } else { pendingNewChatIndex = null; }
-                } catch (e) { pendingNewChatIndex = null; }
-            }
+            updateUrlWithToken();
+            try {
+                var res = await fetch('/api/chats', { method: 'POST' });
+                if (res.ok) {
+                    var data = await res.json();
+                    var realId = data.id;
+                    var savedToken = data.token || newToken;
+                    chats.splice(newId, 1);
+                    chatTitles.splice(newId, 1);
+                    chatTokens.splice(newId, 1);
+                    while (chats.length <= realId) { chats.push([]); chatTitles.push(''); chatTokens.push(''); }
+                    chats[realId] = []; chatTitles[realId] = ''; chatTokens[realId] = savedToken;
+                    currentChat = realId;
+                    updateUrlWithToken();
+                }
+            } catch (e) {}
         }
         if (!isRegenerate) {
             var userMsg = { role: 'user', content: userText || '', images: imgs };

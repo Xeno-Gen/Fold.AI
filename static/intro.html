@@ -1038,6 +1038,19 @@
                         <button class="think-mode-option" data-value="latest">仅最新六行</button>
                     </div>
                 </div>
+                <!-- Prompt 语言 -->
+                <div class="settings-item">
+                    <div class="settings-item-left">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        <span>Prompt 语言</span>
+                    </div>
+                    <div class="think-mode-selector" id="promptLangToggle" style="display: inline-flex;">
+                        <button class="think-mode-option" data-lang="zh">中文</button>
+                        <button class="think-mode-option" data-lang="en">English</button>
+                    </div>
+                </div>
             </div>
 
             <!-- 命令执行设置 -->
@@ -1100,6 +1113,5 @@
 <script src="/chat.js"></script>
 <script src="/slash.js"></script>
 <script src="/debug.js"></script>
-<script src="/vue/app.js"></script>
 </body>
 </html>

@@ -54,7 +54,7 @@ window.showToast = function(msg) {
     var cachedThinkPrompt = '';
     var commandExecEnabled = false, sandboxEnabled = true, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true, askEnabled = true, askAutoShow = true;
     var cachedMemories = [];
-    var chats = [[]], chatTitles = [_('currentChatTitle')], chatTokens = [''], currentChat = 0;
+    var chats = [], chatTitles = [], chatTokens = [], currentChat = -1;
     var activeFiles = { initial: [], chat: [] };
     var streaming = false, isUserScrolledAway = false, currentAbortController = null, currentRequestId = null;
     var currentProvider = null, currentChatFormat = 'OpenAI', currentModel = 'deepseek-v4-flash';
@@ -63,6 +63,7 @@ window.showToast = function(msg) {
     var pureMode = false;
     var autoCollapseThink = true;
     var thinkCollapseDuring = 'off';
+    var promptLang = 'zh';
     var streamAnimation = 'none';
     var includeReasoning = true;
     var chatFontSize = 15;
@@ -442,7 +443,10 @@ window.showToast = function(msg) {
             '<div class="settings-section"><div class="settings-section-title">' + (_('animation') || '动画') + '</div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + (_('streamFadeIn') || '流式渐显') + '</span><div class="think-mode-selector" id="settingsStreamAnimToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (streamAnimation === 'fadein' ? ' active' : '') + '" data-value="fadein">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (streamAnimation !== 'fadein' ? ' active' : '') + '" data-value="none">' + _('off') + '</button></div></div></div>';
+            '<button class="think-mode-option' + (streamAnimation !== 'fadein' ? ' active' : '') + '" data-value="none">' + _('off') + '</button></div></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Prompt 语言</span><div class="think-mode-selector" id="settingsPromptLangToggle" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (promptLang === 'zh' ? ' active' : '') + '" data-lang="zh">中文</button>' +
+            '<button class="think-mode-option' + (promptLang === 'en' ? ' active' : '') + '" data-lang="en">English</button></div></div>';
         // 字体
         var fontSelect = document.getElementById('settingsFontSelect');
         if (fontSelect) {
@@ -491,6 +495,13 @@ window.showToast = function(msg) {
                 streamAnimation = o.dataset.value;
                 saveSettingsToLocal();
                 settingsPanelContent.querySelectorAll('#settingsStreamAnimToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+        settingsPanelContent.querySelectorAll('#settingsPromptLangToggle .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                promptLang = o.dataset.lang;
+                settingsPanelContent.querySelectorAll('#settingsPromptLangToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+                fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ promptLang: promptLang }) }).then(function() { loadConfigFromBackend(); }).catch(function(){});
             };
         });
     }
@@ -799,6 +810,13 @@ window.showToast = function(msg) {
         if (a) { autoCollapseThink = a.dataset.value === 'true'; e.target.closest('#autoCollapseToggle').querySelectorAll('.think-mode-option').forEach(function(x) { x.classList.toggle('active', x === a); }); saveSettingsToLocal(); }
         const tc = e.target.closest('#thinkCollapseToggle .think-mode-option');
         if (tc) { thinkCollapseDuring = tc.dataset.value; e.target.closest('#thinkCollapseToggle').querySelectorAll('.think-mode-option').forEach(function(x) { x.classList.toggle('active', x === tc); }); saveSettingsToLocal(); }
+        const pl = e.target.closest('#promptLangToggle .think-mode-option');
+        if (pl) {
+          promptLang = pl.dataset.lang;
+          e.target.closest('#promptLangToggle').querySelectorAll('.think-mode-option').forEach(function(x) { x.classList.toggle('active', x === pl); });
+          saveSettingsToLocal();
+          fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ promptLang: promptLang }) }).then(function() { loadConfigFromBackend(); }).catch(function(){});
+        }
     });
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (currentTheme === 'system') applyTheme('system'); });
@@ -973,6 +991,16 @@ window.showToast = function(msg) {
             if (data.baseSystemTokenCount !== undefined) baseSystemTokenCount = data.baseSystemTokenCount;
             if (data.pluginPrompts) {
                 pluginPrompts = data.pluginPrompts;
+            }
+            if (data.promptLang) {
+                promptLang = data.promptLang;
+            }
+            // Sync promptLang toggle in settings modal
+            var plt = document.getElementById('promptLangToggle');
+            if (plt) {
+                plt.querySelectorAll('.think-mode-option').forEach(function(o) {
+                    o.classList.toggle('active', o.dataset.lang === promptLang);
+                });
             }
             if (data.workDir) {
                 defaultWorkDir = data.workDir;
@@ -1963,21 +1991,11 @@ window.showToast = function(msg) {
     }
 
     async function newChat(animated) {
-        // 如果已经有空的待确认对话，忽略（已经在开幕状态）
-        if (pendingNewChatIndex !== null && chats[pendingNewChatIndex] && chats[pendingNewChatIndex].length === 0) {
-            return;
-        }
         // 如果当前在对话中，回到开幕界面
         if (isChatActive) {
             deactivateChat();
         }
-        // 创建新的待确认对话
-        var newToken = generateToken();
-        chats.push([]);
-        chatTitles.push(_('newChat'));
-        chatTokens.push(newToken);
-        pendingNewChatIndex = chats.length - 1;
-        currentChat = pendingNewChatIndex;
+        // 清空界面，但不创建对话条目——等待实际发消息时才创建
         if (chatAreaInner) chatAreaInner.innerHTML = '';
         if (emptyHint) { emptyHint.style.display = 'block'; emptyHint.textContent = _('whatCanIDo'); }
         updateHistoryList();
@@ -2158,6 +2176,8 @@ window.showToast = function(msg) {
         // Also tell the backend to abort the upstream request
         if (currentRequestId) {
             fetch('/api/chat/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: currentRequestId }) }).catch(function() {});
+            // Also kill command execution process
+            fetch('/api/plugin/CommandExecution/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: currentRequestId }) }).catch(function() {});
         }
     }
     initSend.onclick = function() {
@@ -2328,7 +2348,7 @@ window.showToast = function(msg) {
             var popup = document.createElement('div');
             popup.className = 'deep-think-popup';
             popup._triggerBtn = triggerBtn;
-            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>安全沙箱</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg><span>' + _('compressOldExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!compressOldExecutions ? ' active' : '') + '" data-tool="compressExec" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>模型提问</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
+            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>安全沙箱</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>模型提问</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
             document.body.appendChild(popup);
             var rect = triggerBtn.getBoundingClientRect();
             popup.style.left = (rect.left + rect.width / 2 - 10) + 'px';
@@ -2370,12 +2390,6 @@ window.showToast = function(msg) {
                     if (tool === 'cothink') {
                         cothinkEnabled = value === 'on';
                         popup.querySelectorAll('.tool-chain-option[data-tool="cothink"]').forEach(function(o) { o.classList.toggle('active', o === op); });
-                        saveSettingsToLocal();
-                    }
-                    if (tool === 'compressExec') {
-                        compressOldExecutions = value === 'on';
-                        popup.querySelectorAll('.tool-chain-option[data-tool="compressExec"]').forEach(function(o) { o.classList.toggle('active', o === op); });
-                        if (window.CommandExecutionPlugin) window.CommandExecutionPlugin.setCompressOldExecutions(compressOldExecutions);
                         saveSettingsToLocal();
                     }
                     if (tool === 'ask') {

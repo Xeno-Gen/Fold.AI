@@ -37,7 +37,8 @@ configRouter.get('/config', (req: Request, res: Response) => {
     for (const [provider, keys] of Object.entries(userConfig.providerKeys)) {
         keysStatus[provider] = Array.isArray(keys) && keys.length > 0;
     }
-    const baseSystemPrompt = getSystemPrompt();
+    const promptLang = userConfig.promptLang || 'zh';
+    const baseSystemPrompt = getSystemPrompt(promptLang);
     res.json({
         defaultParams: userConfig.defaultParams,
         currentProvider: userConfig.currentProvider,
@@ -49,13 +50,14 @@ configRouter.get('/config', (req: Request, res: Response) => {
         pureMode: userConfig.pureMode || false,
         baseSystemPrompt: baseSystemPrompt,
         baseSystemTokenCount: estimateTokens(baseSystemPrompt),
-        pluginPrompts: getPluginPrompts(),
+        pluginPrompts: getPluginPrompts(promptLang),
         workDir: getDefaultWorkDir(),
+        promptLang: promptLang,
     });
 });
 
 configRouter.post('/config', (req: Request, res: Response) => {
-    const { defaultParams, currentProvider, currentModel, customPort, systemPrompt, chatFormat, pureMode } = req.body;
+    const { defaultParams, currentProvider, currentModel, customPort, systemPrompt, chatFormat, pureMode, promptLang } = req.body;
     const userConfig = getUserConfig(req.userToken!);
     if (defaultParams) {
         userConfig.defaultParams = { ...userConfig.defaultParams, ...defaultParams };
@@ -66,6 +68,7 @@ configRouter.post('/config', (req: Request, res: Response) => {
     if (systemPrompt !== undefined) userConfig.systemPrompt = systemPrompt;
     if (chatFormat !== undefined) userConfig.chatFormat = chatFormat;
     if (pureMode !== undefined) userConfig.pureMode = pureMode;
+    if (promptLang !== undefined) userConfig.promptLang = promptLang;
     saveUserConfig(req.userToken!, userConfig);
     res.json({ success: true });
 });

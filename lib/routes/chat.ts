@@ -248,8 +248,8 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
 
         if (!isAnthropicFormat) {
             // OpenAI 格式：system prompt 合并到消息中
-            // 从 config/prompts/*.md 读取基础系统提示词
-            const basePrompt = getSystemPrompt();
+            // 从 config/prompts/Zh|En/*.md 读取基础系统提示词
+            const basePrompt = getSystemPrompt(userConfig.promptLang || 'zh');
             let effectivePrompt = '';
             // 非纯净模式时加入基础提示词
             if (!userConfig.pureMode && basePrompt) {
@@ -437,8 +437,8 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             const { system, messages: anthropicMessages } = toAnthropicMessages(finalMessages);
 
             // 注入系统版本和用户 systemPrompt 到 Anthropic system 字段
-            // 从 config/prompts/*.md 读取基础系统提示词
-            const basePrompt = getSystemPrompt();
+            // 从 config/prompts/Zh|En/*.md 读取基础系统提示词
+            const basePrompt = getSystemPrompt(userConfig.promptLang || 'zh');
             let effectiveSystem = system || '';
             // 非纯净模式时加入基础提示词
             if (!userConfig.pureMode && basePrompt) {
