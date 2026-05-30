@@ -2661,6 +2661,7 @@ async function openFileInBrowser(filePath) {
         await loadProviders();
         await loadConfigFromBackend();
         await loadChatsFromBackend(embeddedToken);
+        loadModelContext();
         loadUsageStats();
         updateModelButtonLabels();
         updateHistoryList();
