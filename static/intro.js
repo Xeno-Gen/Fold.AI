@@ -1279,7 +1279,7 @@ async function openFileInBrowser(filePath) {
         try { var res = await fetch('/api/provider/' + providerId + '/keys/use', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: index }) }); return res.ok; } catch (e) { return false; }
     }
 
-    function openDrawer() { if (drawerOverlay.classList.contains('active')) { drawerOverlay.classList.remove('active'); return; } loadConfigFromBackend().then(function() { renderDrawer(); }); drawerOverlay.classList.add('active'); }
+    function openDrawer() { drawerOverlay.classList.add('active'); loadConfigFromBackend().then(function() { renderDrawer(); }); }
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
     settingsBtn.onclick = openDrawer;
     initialSettingsBtn.onclick = openDrawer;
