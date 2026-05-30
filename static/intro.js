@@ -1279,13 +1279,14 @@ async function openFileInBrowser(filePath) {
         try { var res = await fetch('/api/provider/' + providerId + '/keys/use', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: index }) }); return res.ok; } catch (e) { return false; }
     }
 
-    function openDrawer() { loadConfigFromBackend().then(function() { renderDrawer(); }); drawerOverlay.classList.add('active'); }
+    function openDrawer() { if (drawerOverlay.classList.contains('active')) { drawerOverlay.classList.remove('active'); return; } loadConfigFromBackend().then(function() { renderDrawer(); }); drawerOverlay.classList.add('active'); }
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
     settingsBtn.onclick = openDrawer;
     initialSettingsBtn.onclick = openDrawer;
     document.addEventListener('click', function(e) {
         if (e.target.closest('.drawer-close-btn')) closeDrawer();
     });
+    if (window.CustomProvider) CustomProvider.initCustomProviders();
 
     async function renderDrawer() {
         if (!drawerBody) return;
@@ -1304,6 +1305,7 @@ async function openFileInBrowser(filePath) {
         } else {
             html += '<div style="margin:16px 0 20px;"><div class="section-title" style="margin-bottom:6px;">' + _('apiFormat') + '</div><div style="font-size:13px;color:#888;">' + formats[0] + '</div></div>';
         }
+        if (window.CustomProvider) html += CustomProvider.getCustomProviderSectionHtml();
         html += '<div class="section-title" style="margin-top:10px;">' + _('apiKey') + '</div>';
         html += '<div class="key-input-row"><input type="password" id="newKeyInput" placeholder="' + _('inputKey') + '"><button id="addKeyBtn">' + _('add') + '</button></div>';
         html += '<div class="key-list" id="keyListContainer"></div>';
