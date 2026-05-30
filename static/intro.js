@@ -33,7 +33,7 @@ window.showToast = function(msg) {
     var chatTitleText = $('chatTitleText'), chatTitleInput = $('chatTitleInput');
     var emptyHint = $('emptyHint'), historyList = $('chatHistoryList');
     var settingsBtn = $('settingsBtn'), initialSettingsBtn = $('initialSettingsBtn');
-    var drawerOverlay = $('drawerOverlay'), drawerBody = $('drawerBody'), drawerClose = $('drawerClose');
+    var drawerOverlay = $('drawerOverlay'), drawerBody = $('drawerBody');
     var fileInput = $('hiddenFileInput'), toast = $('toast');
     var initModelBtn = $('initialModelBtn'), chatModelBtn = $('chatModelBtn');
     var initModelLabel = $('initialModelLabel'), chatModelLabel = $('chatModelLabel');
@@ -41,12 +41,7 @@ window.showToast = function(msg) {
     var newChatSidebarBtn = $('newChatSidebarBtn'), sidebarLogo = $('sidebarLogo');
     var initialAttachBtn = $('initialAttachBtn'), chatAttachBtn = $('chatAttachBtn');
 
-    var fileViewerOverlay = $('fileViewerOverlay');
-    var fileViewerBody = $('fileViewerBody'), fileViewerTitle = $('fileViewerTitle'), fileViewerClose = $('fileViewerClose');
     var chatFileBtn = $('chatFileBtn'), initialFileBtn = $('initialFileBtn');
-    // 文件浏览面板
-    var filesPanel = $('filesPanel'), filesPanelBody = $('filesPanelBody'), filesPanelClose = $('filesPanelClose'), filesPanelTitle = $('filesPanelTitle');
-    var filesBreadcrumb = $('filesBreadcrumb'), filesRefreshBtn = $('filesRefreshBtn');
     var filesCurrentDir = '/';
 
     var isChatActive = false, deepThinkEnabled = false, currentThinkMode = 'fast', cothinkEnabled = true;
@@ -194,13 +189,15 @@ window.showToast = function(msg) {
     }
 
     function openFileViewer(name, content) {
-        if (fileViewerTitle) fileViewerTitle.textContent = name;
-        if (fileViewerBody) fileViewerBody.innerHTML = '<pre class="file-viewer-pre">' + escapeHtml(content) + '</pre>';
-        if (fileViewerOverlay) fileViewerOverlay.classList.add('active');
+        var dt = document.getElementById('drawerTitle');
+        var db = document.getElementById('drawerBody');
+        if (!db) return;
+        if (dt) dt.textContent = name;
+        db.innerHTML = '<pre class="file-viewer-pre" style="padding:0;margin:0;background:transparent;">' + escapeHtml(content) + '</pre>';
+        var dov = document.getElementById('drawerOverlay');
+        if (dov) dov.classList.add('active');
     }
-    function closeFileViewer() { if (fileViewerOverlay) fileViewerOverlay.classList.remove('active'); }
-    if (fileViewerClose) fileViewerClose.onclick = closeFileViewer;
-    if (fileViewerOverlay) fileViewerOverlay.addEventListener('click', e => { if (e.target === fileViewerOverlay) closeFileViewer(); });
+    
 
     if (sidebarToggle) sidebarToggle.onclick = () => { sidebarLeft.classList.toggle('visible'); sidebarLeft.classList.toggle('expanded'); };
 
@@ -211,85 +208,6 @@ window.showToast = function(msg) {
         openSettings();
     }
     
-    async function loadDirectory(dir) {
-        filesCurrentDir = dir;
-        if (!filesPanelBody) return;
-        filesPanelBody.innerHTML = '<div class="files-panel-empty">加载中...</div>';
-        try {
-            var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
-            var url = '/api/files/browse?dir=' + encodeURIComponent(dir) + '&workingDirectory=' + encodeURIComponent(workDir);
-            var res = await fetch(url);
-            if (!res.ok) { filesPanelBody.innerHTML = '<div class="files-panel-empty">加载失败</div>'; return; }
-            var data = await res.json();
-            renderFileList(data);
-        } catch (e) {
-            filesPanelBody.innerHTML = '<div class="files-panel-empty">加载失败: ' + e.message + '</div>';
-        }
-    }
-    function renderFileList(data) {
-        if (!filesPanelBody) return;
-        // 面包屑
-        if (filesBreadcrumb) {
-            var parts = data.path.split('/').filter(Boolean);
-            var html = '<span data-path="/">工作目录</span>';
-            var accum = '';
-            parts.forEach(function(p, i) {
-                accum += '/' + p;
-                html += '<span class="sep">/</span>';
-                if (i === parts.length - 1) {
-                    html += '<span class="current">' + escapeHtml(p) + '</span>';
-                } else {
-                    html += '<span data-path="' + accum + '">' + escapeHtml(p) + '</span>';
-                }
-            });
-            filesBreadcrumb.innerHTML = html;
-            filesBreadcrumb.querySelectorAll('span[data-path]').forEach(function(s) {
-                s.onclick = function() { loadDirectory(this.dataset.path); };
-            });
-        }
-        if (!data.items || data.items.length === 0) {
-            filesPanelBody.innerHTML = '<div class="files-panel-empty">目录为空</div>';
-            return;
-        }
-        var listHtml = '';
-        data.items.forEach(function(item) {
-            var isDir = item.isDir;
-            var iconHtml = isDir
-                ? '<svg class="file-icon folder" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>'
-                : '<svg class="file-icon file" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
-            var filePath = data.path === '/' ? '/' + item.name : data.path + '/' + item.name;
-            var sizeStr = isDir ? '' : formatFileSize(item.size);
-            var actionBtns = '';
-            if (!isDir) {
-                actionBtns = '<button class="file-action-btn file-preview-btn" data-path="' + escapeHtml(filePath) + '" title="预览"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>';
-            }
-            listHtml += '<div class="file-list-item" data-path="' + escapeHtml(filePath) + '" data-is-dir="' + isDir + '">' +
-                iconHtml +
-                '<span class="file-name">' + escapeHtml(item.name) + '</span>' +
-                actionBtns +
-                (sizeStr ? '<span class="file-meta">' + sizeStr + '</span>' : '') +
-                '</div>';
-        });
-        filesPanelBody.innerHTML = listHtml;
-        filesPanelBody.querySelectorAll('.file-list-item').forEach(function(el) {
-            el.onclick = function(e) {
-                if (e.target.closest('.file-action-btn')) return;
-                var p = this.dataset.path;
-                if (this.dataset.isDir === 'true') {
-                    loadDirectory(p);
-                } else {
-                    openFileInBrowser(p);
-                }
-            };
-        });
-        // Preview button handlers
-        filesPanelBody.querySelectorAll('.file-preview-btn').forEach(function(btn) {
-            btn.onclick = function(e) {
-                e.stopPropagation();
-                window.open('/cwd' + this.dataset.path, '_blank');
-            };
-        });
-    }
     function formatFileSize(bytes) {
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
