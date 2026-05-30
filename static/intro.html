@@ -299,7 +299,7 @@
 
         .model-picker-dropdown{
             position:fixed;z-index:999;display:none;flex-direction:column;
-            width:260px;max-height:360px;background:#fff;border-radius:6px;
+            width:338px;max-height:400px;background:#fff;border-radius:6px;
             box-shadow:0 20px 50px rgba(0,0,0,0.18);border:0.5px solid #e0e0e0;
             overflow:hidden;transform-origin:bottom center;
         }
@@ -319,6 +319,12 @@
         .model-picker-item.active{background:#e8e8e8;font-weight:600;color:#000;}
         .model-picker-item .model-name{font-size:13px;color:#1a1a1a;font-weight:500;flex:1;}
         .model-picker-item.active .model-name{color:#000;}
+        .model-ctx-badge{
+            display:inline-block;padding:2px 8px;border-radius:10px;background:#f0efec;
+            font-size:10px;font-weight:600;color:#8b8178;margin-left:6px;flex-shrink:0;
+            letter-spacing:0.3px;line-height:1.5;
+        }
+        [data-theme="dark"] .model-ctx-badge{background:#2a2a2a;color:#999;}
 
         .char-count{font-size:10px;color:#aaa;user-select:none;margin-right:4px;white-space:nowrap;}
         .image-preview-area{display:flex;gap:8px;padding:2px 14px 6px;flex-wrap:wrap;max-height:76px;overflow-y:auto;}
@@ -465,6 +471,15 @@
         .think-body-wrapper {
             padding: 5px 0 5px 22px;
             position: relative;
+            overflow: hidden;
+            max-height: none;
+            opacity: 1;
+        }
+        .think-block.collapsed .think-body-wrapper {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
         }
         .think-body-wrapper .think-line {
             border-left: 1px solid #d1d5db;
@@ -477,9 +492,6 @@
             font-size: 13px;
             color: #666;
             line-height: 1.5;
-        }
-        .think-block.collapsed .think-body-wrapper {
-            display: none;
         }
 
         .think-status {
@@ -504,21 +516,29 @@
         .bottom-spacer{height:20px;flex-shrink:0;}body.chat-active .bottom-spacer{height:10px;}
 
         .drawer-overlay{
-            position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.15);
-            z-index:50;opacity:0;pointer-events:none;transition:opacity 0.2s;
+            width:0;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column;
+            transition:width 0.4s cubic-bezier(0.23, 1, 0.32, 1);
         }
-        .drawer-overlay.active{opacity:1;pointer-events:all;}
+        .drawer-overlay.active{
+            width:33%;position:relative;z-index:46;
+        }
         .drawer{
-            position:fixed;top:0;right:0;width:520px;max-width:100%;height:100%;background:#fff;
-            box-shadow:-8px 0 30px rgba(0,0,0,0.08);z-index:51;transform:translateX(100%);
-            transition:transform 0.3s ease;display:flex;flex-direction:column;
-            border-left:0.5px solid #e0e0e0;
+            width:100%;height:100%;display:flex;flex-direction:column;
+            background:var(--bg,#fff);border-left:0.5px solid var(--border,#e0e0e0);
+            min-width:0;opacity:0;transition:opacity 0.25s ease 0.12s;
         }
-        .drawer-overlay.active .drawer{transform:translateX(0);}
-        .drawer-header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #eee;}
-        .drawer-header h2{font-size:18px;font-weight:600;}
-        .drawer-close{width:32px;height:32px;border-radius:4px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#777;}
-        .drawer-close:hover{background:#f0f0f0;}
+        .drawer-overlay.active .drawer{opacity:1;}
+        .drawer-header{
+            display:flex;align-items:center;justify-content:space-between;
+            padding:18px 20px;border-bottom:0.5px solid var(--border,#e0e0e0);flex-shrink:0;
+        }
+        .drawer-header h2{font-size:15px;font-weight:600;color:var(--text,#333);margin:0;}
+        .drawer-close,.drawer-close-btn{
+            width:30px;height:30px;border-radius:6px;border:none;background:transparent;
+            cursor:pointer;display:flex;align-items:center;justify-content:center;color:#999;
+            transition:all 0.15s;
+        }
+        .drawer-close:hover,.drawer-close-btn:hover{background:var(--hover-bg,#f0f0f0);color:#555;}
         .drawer-body{flex:1;overflow-y:auto;padding:20px;}
         .section-title{font-size:12px;font-weight:600;color:#999;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;}
         .provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:24px;}
@@ -644,7 +664,7 @@
 
         @media(max-width:768px){
             :root{--input-width:100%;--input-min-width:unset;}
-            .drawer{width:100%;}
+            .drawer-overlay.active{width:85%;}
             .model-picker-dropdown{width:90vw;left:5vw!important;transform-origin:bottom center!important;}
             .center-initial { top: 45%; }
             .bottom-input-container { padding: 8px 10px 24px; }
@@ -713,101 +733,6 @@
         [data-theme="dark"] .theme-toggle-btn:hover{background:#2a2a2a;color:#e0e0e0;}
 
 
-        /* 文件浏览面板 */
-        .files-panel{
-            display:none;flex-direction:column;
-            height:100%;width:100%;max-width:1080px;
-            margin:60px auto 0;background:var(--bg,#fff);overflow:hidden;
-        }
-        .files-panel.active{display:flex;animation:settingsIn 0.2s ease;}
-        .files-workdir-row{
-            display:flex;align-items:center;gap:8px;
-            padding:8px 20px;border-bottom:1px solid var(--border,#eee);
-            flex-shrink:0;
-        }
-        .files-workdir-input{
-            flex:1;padding:6px 10px;border:1px solid #e8e5df;border-radius:6px;
-            font-size:12px;background:#fafaf7;color:#3c3630;outline:none;
-            font-family:'SF Mono','Monaco','Consolas',monospace;
-        }
-        .files-workdir-input:focus{border-color:#c4bdb2;background:#fff;}
-        .files-workdir-reset{
-            padding:6px 12px;border:1px solid #e8e5df;border-radius:6px;
-            background:#fafaf7;color:#9b968b;font-size:12px;cursor:pointer;white-space:nowrap;
-        }
-        .files-workdir-reset:hover{background:#f0ede6;color:#6b6358;}
-        [data-theme="dark"] .files-workdir-input{background:#1c1c1c;color:#d0d0d0;border-color:#333;}
-        [data-theme="dark"] .files-workdir-input:focus{border-color:#555;background:#222;}
-        [data-theme="dark"] .files-workdir-reset{background:#1c1c1c;color:#888;border-color:#333;}
-        [data-theme="dark"] .files-workdir-reset:hover{background:#2a2a2a;color:#aaa;}
-        .files-panel-toolbar{
-            display:flex;align-items:center;gap:10px;
-            padding:8px 20px;border-bottom:1px solid var(--border,#eee);
-            flex-shrink:0;
-        }
-        .files-breadcrumb{
-            display:flex;align-items:center;gap:4px;
-            font-size:13px;color:#555;flex:1;overflow-x:auto;white-space:nowrap;
-        }
-        .files-breadcrumb span{cursor:pointer;color:#1a6bc0;transition:color 0.2s;}
-        .files-breadcrumb span:hover{color:#0d4f99;text-decoration:underline;}
-        .files-breadcrumb span.current{color:#555;cursor:default;font-weight:500;}
-        .files-breadcrumb span.current:hover{text-decoration:none;}
-        .files-breadcrumb .sep{color:#ccc;cursor:default;margin:0 2px;}
-        .files-refresh-btn{
-            width:30px;height:30px;border-radius:6px;border:none;
-            background:transparent;cursor:pointer;color:#999;
-            display:flex;align-items:center;justify-content:center;
-            transition:background 0.2s;flex-shrink:0;
-        }
-        .files-refresh-btn:hover{background:#f0f0f0;color:#333;}
-        .files-panel-body{
-            flex:1;overflow-y:auto;padding:16px 20px;
-        }
-        .files-panel-empty{text-align:center;color:#bbb;font-size:13px;margin-top:32px;}
-        .file-list-item{
-            display:flex;align-items:center;gap:10px;
-            padding:10px 14px;border-radius:8px;cursor:pointer;
-            transition:background 0.15s;font-size:13px;color:#333;
-        }
-        .file-list-item:hover{background:#f5f5f5;}
-        .file-list-item .file-icon{
-            flex-shrink:0;
-        }
-        .file-list-item .file-icon.folder{color:#d4a853;}
-        .file-list-item .file-icon.file{color:#8b9d83;}
-        .file-list-item .file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        .file-list-item .file-meta{font-size:11px;color:#999;flex-shrink:0;margin-left:8px;}
-        .file-action-btn{
-            width:28px;height:28px;border-radius:6px;border:none;
-            background:transparent;cursor:pointer;color:#bbb;
-            display:flex;align-items:center;justify-content:center;
-            transition:all 0.15s;flex-shrink:0;padding:0;
-        }
-        .file-action-btn:hover{background:#f0f0f0;color:#555;}
-        .file-preview-btn:hover{color:#1a6bc0;}
-        .file-delete-btn:hover{color:#e74c3c;background:#fef0f0;}
-        [data-theme="dark"] .file-action-btn:hover{background:#2a2a2a;}
-        [data-theme="dark"] .file-preview-btn:hover{color:#5b9bd5;}
-        [data-theme="dark"] .file-delete-btn:hover{color:#e74c3c;background:#2a2020;}
-
-        [data-theme="dark"] .sidebar-files-fab{background:#1c1c1c;color:#999;box-shadow:0 1px 4px rgba(0,0,0,0.3);}
-        [data-theme="dark"] .sidebar-files-fab:hover{background:#2a2a2a;color:#e0e0e0;}
-        [data-theme="dark"] .files-panel{background:#0f0f0f;}
-        [data-theme="dark"] .files-panel-toolbar{border-bottom-color:#2a2a2a;}
-        [data-theme="dark"] .files-breadcrumb{color:#888;}
-        [data-theme="dark"] .files-breadcrumb span{color:#5b9bd5;}
-        [data-theme="dark"] .files-breadcrumb span:hover{color:#7ab8f0;}
-        [data-theme="dark"] .files-breadcrumb span.current{color:#888;}
-        [data-theme="dark"] .files-refresh-btn:hover{background:#2a2a2a;color:#e0e0e0;}
-        [data-theme="dark"] .file-list-item{color:#ccc;}
-        [data-theme="dark"] .file-list-item:hover{background:#1a1a1a;}
-        [data-theme="dark"] .file-list-item .file-icon.folder{color:#d4a853;}
-        [data-theme="dark"] .file-list-item .file-icon.file{color:#8b9d83;}
-
-        @media(max-width:768px){
-            .files-panel{margin-top:40px;}
-        }
     </style>
     <link rel="stylesheet" href="/vue/vue-components.css">
 </head>
@@ -917,34 +842,7 @@
                 </div>
             </div>
         </div>
-        <div class="bottom-spacer"></div>
-
-        <!-- 文件浏览面板 -->
-        <div class="files-panel" id="filesPanel">
-            <div class="settings-panel-header">
-                <h2 id="filesPanelTitle">工作目录</h2>
-                <button class="settings-panel-close" id="filesPanelClose">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="files-workdir-row">
-                <input type="text" id="filesWorkDirInput" class="files-workdir-input" placeholder="工作目录路径" spellcheck="false">
-                <button class="files-workdir-reset" id="filesWorkDirReset" title="恢复默认">默认</button>
-            </div>
-            <div class="files-panel-toolbar">
-                <div class="files-breadcrumb" id="filesBreadcrumb"></div>
-                <button class="files-refresh-btn" id="filesRefreshBtn" title="刷新">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                </button>
-            </div>
-            <div class="files-panel-body" id="filesPanelBody">
-                <div class="files-panel-empty">加载中...</div>
-            </div>
-            <div id="vue-file-browser" style="height:100%;"></div>
-        </div>
-        <!-- 设置面板（双栏布局替换右侧内容） -->
+        <!-- 设置面板 -->
         <div class="settings-panel" id="settingsPanel">
             <div class="settings-panel-header">
                 <h2>设置</h2>
@@ -963,7 +861,7 @@
 
     <div class="drawer-overlay" id="drawerOverlay">
         <div class="drawer" id="drawer">
-            <div class="drawer-header"><h2>设置</h2><button class="drawer-close" id="drawerClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+            <div class="drawer-header"><h2 id="drawerTitle">设置</h2><button class="drawer-close-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
             <div class="drawer-body" id="drawerBody"></div>
         </div>
     </div>
@@ -1085,22 +983,6 @@
                 </div>
             </div>
         </div>
-    </div>
-</div>
-
-
-<!-- 文件查看面板 -->
-<div class="file-viewer-overlay" id="fileViewerOverlay">
-    <div class="file-viewer-drawer">
-        <div class="file-viewer-header">
-            <h2 id="fileViewerTitle">文件查看</h2>
-            <button class="file-viewer-close" id="fileViewerClose">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-            </button>
-        </div>
-        <div class="file-viewer-body" id="fileViewerBody"></div>
     </div>
 </div>
 

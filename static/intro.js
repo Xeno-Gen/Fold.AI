@@ -60,6 +60,7 @@ window.showToast = function(msg) {
     var currentProvider = null, currentChatFormat = 'OpenAI', currentModel = 'deepseek-v4-flash';
     var currentParams = { temperature: 0.7, top_p: 1.0, max_tokens: 2048, seed: null, frequency_penalty: 0, presence_penalty: 0, top_k: null, systemPrompt: '' };
     var customPort = 8080, providers = [], availableModels = [], allModels = [];
+    var _modelContextMap = {};
     var pureMode = false;
     var autoCollapseThink = true;
     var thinkCollapseDuring = 'off';
@@ -206,24 +207,10 @@ window.showToast = function(msg) {
     // 文件浏览面板
     var bottomSpacerEl = document.querySelector('.bottom-spacer');
     function openFileBrowser() {
-        closeSettings();
-        if (filesPanel) filesPanel.classList.add('active');
-        if (chatArea) { chatArea.style.display = 'none'; }
-        if (centerInit) centerInit.style.display = 'none';
-        if (bottomInput) bottomInput.style.display = 'none';
-        if (chatHeader) chatHeader.style.display = 'none';
-        if (bottomSpacerEl) bottomSpacerEl.style.display = 'none';
-        updateWorkDirInput();
-        loadDirectory(filesCurrentDir);
+        settingsLastTab = 'workdir';
+        openSettings();
     }
-    function closeFileBrowser() {
-        if (filesPanel) filesPanel.classList.remove('active');
-        if (chatArea) { chatArea.style.display = ''; }
-        if (centerInit) centerInit.style.display = '';
-        if (bottomInput) bottomInput.style.display = '';
-        if (chatHeader) chatHeader.style.display = '';
-        if (bottomSpacerEl) bottomSpacerEl.style.display = '';
-    }
+    
     async function loadDirectory(dir) {
         filesCurrentDir = dir;
         if (!filesPanelBody) return;
@@ -308,7 +295,204 @@ window.showToast = function(msg) {
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
-    async function openFileInBrowser(filePath) {
+    function renderWorkdirTab() {
+    if (!settingsPanelContent) return;
+    var curDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
+    var html = '<div class="settings-section"><div class="settings-section-title">工作目录</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+    html += '<input type="text" id="wdTabPathInput" class="workdir-path-input" value="' + escapeHtml(curDir) + '" spellcheck="false" placeholder="工作目录路径">';
+    html += '<button class="workdir-btn" id="wdTabBrowseBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg> 选择</button>';
+    html += '<button class="workdir-btn" id="wdTabRefreshBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>';
+    html += '<button class="workdir-btn" id="wdTabResetBtn">默认</button>';
+    html += '</div>';
+    html += '<input type="file" id="wdNativeFolderPicker" webkitdirectory style="display:none">';
+    html += '<div class="workdir-files-container">';
+    html += '<div class="workdir-files-toolbar"><div class="workdir-breadcrumb" id="wdBreadcrumb"></div></div>';
+    html += '<div class="workdir-file-list" id="wdFileList"><div class="files-panel-empty">输入路径后回车或点击选择</div></div>';
+    html += '</div></div>';
+    html += '<div class="wd-context-menu" id="wdCtxMenu"></div>';
+    settingsPanelContent.innerHTML = html;
+    var inp = document.getElementById('wdTabPathInput');
+    if (inp) inp.addEventListener('change', function() {
+        var v = this.value.trim(); if (!v) return;
+        if (window.CommandExecutionPlugin) { window.CommandExecutionPlugin.workingDirectory = v; window.CommandExecutionPlugin.saveSettings(); }
+        loadDirectoryForTab(filesCurrentDir);
+    });
+    document.getElementById('wdTabBrowseBtn').onclick = handleFolderPickTab;
+    document.getElementById('wdTabRefreshBtn').onclick = function() { loadDirectoryForTab(filesCurrentDir); };
+    document.getElementById('wdTabResetBtn').onclick = function() {
+        var def = defaultWorkDir || 'cwd';
+        if (inp) inp.value = def;
+        if (window.CommandExecutionPlugin) { window.CommandExecutionPlugin.workingDirectory = def; window.CommandExecutionPlugin.saveSettings(); }
+        loadDirectoryForTab(filesCurrentDir);
+    };
+    loadDirectoryForTab(filesCurrentDir);
+    document.removeEventListener('keydown', _wdKeyHandler);
+    document.addEventListener('keydown', _wdKeyHandler = function(e) {
+        if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+        if (!settingsPanel.classList.contains('active')) return;
+        if (document.activeElement && document.activeElement.id === 'wdTabPathInput') return;
+        var sel = document.querySelector('.workdir-file-list .file-list-item.selected');
+        if (sel) {
+            e.preventDefault();
+            var path = sel.dataset.path;
+            if (confirm('确定删除 ' + path + ' ？')) {
+                fetch('/api/files/delete?file=' + encodeURIComponent(path), { method: 'DELETE' }).then(function(r) {
+                    if (r.ok) loadDirectoryForTab(filesCurrentDir);
+                    else showToast('删除失败');
+                }).catch(function() { showToast('删除失败'); });
+            }
+        }
+    });
+    var wdFl = document.getElementById('wdFileList');
+    if (wdFl) {
+        wdFl.ondragover = function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+        wdFl.ondrop = function(e) {
+            e.preventDefault();
+            var srcPath = e.dataTransfer.getData('text/plain');
+            if (!srcPath) return;
+            var targetDir = filesCurrentDir === '/' ? '' : filesCurrentDir;
+            var dropTarget = e.target.closest('.file-list-item');
+            var destDir = dropTarget && dropTarget.dataset.isDir === 'true' ? (dropTarget.dataset.path === '/' ? '' : dropTarget.dataset.path) : targetDir;
+            if (srcPath === destDir) return;
+            var fileName = srcPath.split('/').filter(Boolean).pop();
+            var destPath = (destDir ? destDir + '/' : '/') + fileName;
+            if (srcPath === destPath) return;
+            if (confirm('移动 ' + fileName + ' 到目标目录？')) {
+                fetch('/api/files/rename', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ from: srcPath, to: destPath }) }).then(function(r) {
+                    if (r.ok) loadDirectoryForTab(filesCurrentDir);
+                    else showToast('移动失败');
+                }).catch(function() { showToast('移动失败'); });
+            }
+        };
+    }
+}
+function loadDirectoryForTab(dir) {
+    filesCurrentDir = dir;
+    var fl = document.getElementById('wdFileList'), bc = document.getElementById('wdBreadcrumb');
+    if (!fl) return;
+    fl.innerHTML = '<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0;">加载中...</div>';
+    var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
+    fetch('/api/files/browse?dir=' + encodeURIComponent(dir) + '&workingDirectory=' + encodeURIComponent(wd))
+        .then(function(r) { return r.json(); })
+        .then(function(data) { renderFileListForTab(data); })
+        .catch(function() { fl.innerHTML = '<div class="files-panel-empty">加载失败</div>'; });
+}
+function renderFileListForTab(data) {
+    var fl = document.getElementById('wdFileList'), bc = document.getElementById('wdBreadcrumb');
+    if (!fl) return;
+    if (bc) {
+        var parts = data.path.split('/').filter(Boolean);
+        var h = '<span data-path="/">工作目录</span>', acc = '';
+        parts.forEach(function(p, i) {
+            acc += '/' + p;
+            h += '<span class="sep">/</span>';
+            h += i === parts.length-1 ? '<span class="current">' + escapeHtml(p) + '</span>' : '<span data-path="' + acc + '">' + escapeHtml(p) + '</span>';
+        });
+        bc.innerHTML = h;
+        bc.querySelectorAll('span[data-path]').forEach(function(s) { s.onclick = function() { loadDirectoryForTab(this.dataset.path); }; });
+    }
+    if (!data.items || !data.items.length) { fl.innerHTML = '<div class="files-panel-empty">目录为空</div>'; return; }
+    var lh = '';
+    data.items.forEach(function(item) {
+        var isDir = item.isDir;
+        var ext = item.name.indexOf('.') >= 0 ? item.name.split('.').pop().toLowerCase() : '';
+        var isImg = ['png','jpg','jpeg','gif','webp','bmp','svg'].indexOf(ext) >= 0;
+        var fp = data.path === '/' ? '/' + item.name : data.path + '/' + item.name;
+        var thumb = '';
+        if (isDir) {
+            thumb = '<svg class="file-icon folder" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>';
+        } else if (isImg) {
+            thumb = '<img src="/cwd' + fp + '" style="width:56px;height:56px;border-radius:6px;object-fit:cover;" loading="lazy" onerror="this.style.display=\'none\'">';
+        } else {
+            thumb = '<svg class="file-icon file" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
+        }
+        var sz = isDir ? '' : formatFileSize(item.size);
+        lh += '<div class="file-list-item" data-path="' + escapeHtml(fp) + '" data-is-dir="' + isDir + '" draggable="true">' + thumb + '<span class="file-name">' + escapeHtml(item.name) + '</span>' + (sz ? '<span class="file-meta">' + sz + '</span>' : '') + '</div>';
+    });
+    fl.innerHTML = lh;
+    fl.querySelectorAll('.file-list-item').forEach(function(el) {
+        el.onclick = function(e) { closeCtxMenu(); if (this.dataset.isDir === 'true') loadDirectoryForTab(this.dataset.path); else openFileInBrowser(this.dataset.path); };
+        el.oncontextmenu = function(e) { e.preventDefault(); showFileCtxMenu(e, this.dataset.path, this.dataset.isDir === 'true'); };
+        el.ondragstart = function(e) { e.dataTransfer.setData('text/plain', this.dataset.path); e.dataTransfer.effectAllowed = 'move'; };
+    });
+}
+function handleFolderPickTab() {
+    if (window.showDirectoryPicker) {
+        showDirectoryPicker().then(function(dh) {
+            var inp = document.getElementById('wdTabPathInput');
+            if (inp) inp.value = dh.name;
+            if (window.CommandExecutionPlugin) { window.CommandExecutionPlugin.workingDirectory = dh.name; window.CommandExecutionPlugin.saveSettings(); }
+            loadDirectoryForTab(filesCurrentDir);
+        }).catch(function(err) { if (err.name !== 'AbortError') fallbackPickTab(); });
+    } else fallbackPickTab();
+}
+function fallbackPickTab() {
+    var picker = document.getElementById('wdNativeFolderPicker');
+    if (picker) {
+        picker.click();
+        picker.onchange = function() {
+            if (this.files && this.files.length > 0) {
+                var rd = this.files[0].webkitRelativePath.split('/')[0];
+                var inp = document.getElementById('wdTabPathInput');
+                if (inp) inp.value = rd;
+                if (window.CommandExecutionPlugin) { window.CommandExecutionPlugin.workingDirectory = rd; window.CommandExecutionPlugin.saveSettings(); }
+                loadDirectoryForTab(filesCurrentDir);
+            }
+        };
+    }
+}
+var _wdKeyHandler = null;
+function closeCtxMenu() {
+    var m = document.getElementById('wdCtxMenu');
+    if (m) m.classList.remove('active');
+}
+function showFileCtxMenu(e, path, isDir) {
+    closeCtxMenu();
+    var m = document.getElementById('wdCtxMenu');
+    if (!m) return;
+    document.querySelectorAll('.workdir-file-list .file-list-item').forEach(function(el) { el.classList.remove('selected'); });
+    var q = '.workdir-file-list .file-list-item[data-path="' + path.replace(/"/g, '&quot;') + '"]';
+    var items = document.querySelectorAll(q);
+    if (items.length) items[0].classList.add('selected');
+    var html = '';
+    html += '<div class="wd-context-menu-item" data-action="view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> 查看</div>';
+    html += '<div class="wd-context-menu-item" data-action="rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> 重命名</div>';
+    if (!isDir) html += '<div class="wd-context-menu-item" data-action="viewFile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> 查看文件</div>';
+    html += '<div class="wd-context-menu-item danger" data-action="delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除</div>';
+    m.innerHTML = html;
+    m.style.left = e.clientX + 'px';
+    m.style.top = e.clientY + 'px';
+    m.classList.add('active');
+    m.querySelectorAll('.wd-context-menu-item').forEach(function(item) {
+        item.onclick = function() {
+            closeCtxMenu();
+            var action = this.dataset.action;
+            if (action === 'view') { if (isDir) loadDirectoryForTab(path); else openFileInBrowser(path); }
+            else if (action === 'viewFile') { window.open('/cwd' + path, '_blank'); }
+            else if (action === 'rename') {
+                var name = path.split('/').filter(Boolean).pop() || '';
+                var newName = prompt('重命名:', name);
+                if (newName && newName !== name) {
+                    var pp = path.substring(0, path.length - name.length);
+                    fetch('/api/files/rename', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ from: path, to: pp + newName }) })
+                        .then(function(r) { if (r.ok) loadDirectoryForTab(filesCurrentDir); else showToast('重命名失败'); })
+                        .catch(function() { showToast('重命名失败'); });
+                }
+            } else if (action === 'delete') {
+                if (confirm('确定删除 ' + path + ' ？')) {
+                    fetch('/api/files/delete?file=' + encodeURIComponent(path), { method: 'DELETE' })
+                        .then(function(r) { if (r.ok) loadDirectoryForTab(filesCurrentDir); else showToast('删除失败'); })
+                        .catch(function() { showToast('删除失败'); });
+                }
+            }
+        };
+    });
+    setTimeout(function() { var _cc; document.addEventListener('click', _cc = function(e) { if (!e.target.closest('.wd-context-menu')) { closeCtxMenu(); document.removeEventListener('click', _cc); } }); }, 10);
+}
+
+
+async function openFileInBrowser(filePath) {
         try {
             var res = await fetch('/api/files/read?file=' + encodeURIComponent(filePath));
             if (!res.ok) { showToast('无法读取文件'); return; }
@@ -324,39 +508,7 @@ window.showToast = function(msg) {
             showToast('读取失败: ' + e.message);
         }
     }
-    if (filesPanelClose) filesPanelClose.onclick = closeFileBrowser;
-    if (filesRefreshBtn) filesRefreshBtn.onclick = function() { loadDirectory(filesCurrentDir); };
-
-    // Working directory input in file browser
-    var filesWorkDirInput = document.getElementById('filesWorkDirInput');
-    var filesWorkDirReset = document.getElementById('filesWorkDirReset');
-    function updateWorkDirInput() {
-        if (filesWorkDirInput) {
-            filesWorkDirInput.value = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
-        }
-    }
-    if (filesWorkDirInput) {
-        filesWorkDirInput.addEventListener('change', function() {
-            var val = this.value.trim();
-            if (!val) return;
-            if (window.CommandExecutionPlugin) {
-                window.CommandExecutionPlugin.workingDirectory = val;
-                window.CommandExecutionPlugin.saveSettings();
-            }
-            loadDirectory(filesCurrentDir);
-        });
-    }
-    if (filesWorkDirReset) {
-        filesWorkDirReset.addEventListener('click', function() {
-            var defDir = defaultWorkDir || 'cwd';
-            if (filesWorkDirInput) filesWorkDirInput.value = defDir;
-            if (window.CommandExecutionPlugin) {
-                window.CommandExecutionPlugin.workingDirectory = defDir;
-                window.CommandExecutionPlugin.saveSettings();
-            }
-            loadDirectory(filesCurrentDir);
-        });
-    }
+    
     if (chatFileBtn) chatFileBtn.onclick = function() { openFileBrowser(); };
     if (initialFileBtn) initialFileBtn.onclick = function() { openFileBrowser(); };
 
@@ -371,12 +523,12 @@ window.showToast = function(msg) {
         { id: 'plugins', label: _('plugins'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
         { id: 'memories', label: _('memories'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>' },
         { id: 'usage', label: _('usage'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' },
+        { id: 'workdir', label: '工作目录', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>' },
         { id: 'identity', label: _('userIdentity'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg>' },
         { id: 'version', label: _('version'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' }
     ];
 
     function openSettings() {
-        closeFileBrowser();
         if (settingsPanel) settingsPanel.classList.add('active');
         if (chatArea) chatArea.style.display = 'none';
         if (centerInit) centerInit.style.display = 'none';
@@ -405,7 +557,7 @@ window.showToast = function(msg) {
         try { localStorage.setItem('fold_settings_tab', tab); } catch (e) {}
         if (settingsPanelNav) {
             settingsPanelNav.innerHTML = settingsTabMeta.map(function(meta) {
-                return '<button class="settings-panel-nav-item' + (meta.id === tab ? ' active' : '') + '" data-tab="' + meta.id + '">' + meta.icon + '<span>' + _(meta.id) + '</span></button>';
+                return '<button class="settings-panel-nav-item' + (meta.id === tab ? ' active' : '') + '" data-tab="' + meta.id + '">' + meta.icon + '<span>' + (meta.label || _(meta.id)) + '</span></button>';
             }).join('');
             settingsPanelNav.querySelectorAll('.settings-panel-nav-item').forEach(function(btn) {
                 btn.onclick = function() { switchSettingsTab(btn.dataset.tab); };
@@ -416,6 +568,7 @@ window.showToast = function(msg) {
         else if (tab === 'plugins') renderPluginsTab();
         else if (tab === 'memories') renderMemoriesTab();
         else if (tab === 'usage') { loadUsageStats().then(function() { renderUsageTab(); }); }
+        else if (tab === 'workdir') renderWorkdirTab();
         else if (tab === 'identity') { renderIdentitySettingsTab(); }
         else if (tab === 'version') renderVersionTab();
     }
@@ -936,7 +1089,10 @@ window.showToast = function(msg) {
         if (!dropdownInstance) return;
         let h = '<div class="model-search"><input type="text" class="model-search-input" placeholder="' + _('searchModel') + '"></div><div class="model-list">';
         allModels.forEach(function(m) {
-            h += '<div class="model-picker-item' + (m === currentModel ? ' active' : '') + '" data-model="' + m + '"><div class="model-name">' + m + '</div></div>';
+            var ctxKey = m.toLowerCase();
+            var ctxVal = _modelContextMap[ctxKey];
+            var ctxBadge = ctxVal ? '<span class="model-ctx-badge">' + ctxVal.toUpperCase() + '</span>' : '';
+            h += '<div class="model-picker-item' + (m === currentModel ? ' active' : '') + '" data-model="' + m + '"><div class="model-name">' + m + '</div>' + ctxBadge + '</div>';
         });
         if (!allModels.length) h += '<div style="padding:20px;text-align:center;color:#999;">' + _('noModelAvailable') + '</div>';
         h += '</div>';
@@ -972,6 +1128,19 @@ window.showToast = function(msg) {
 
     async function saveConfigToBackend() {
         try { await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ defaultParams: currentParams, currentProvider: currentProvider, currentModel: currentModel, customPort: customPort, systemPrompt: currentParams.systemPrompt, chatFormat: currentChatFormat, pureMode: pureMode }) }); } catch (e) {}
+    }
+
+    function loadModelContext() {
+        fetch('/config/context/context.txt').then(function(r) { return r.text(); }).then(function(text) {
+            var map = {};
+            text.split('\n').forEach(function(line) {
+                line = line.trim();
+                if (!line) return;
+                var match = line.match(/^([^\[]+)\[([^\]]+)\]/);
+                if (match) map[match[1].trim().toLowerCase()] = match[2].trim();
+            });
+            _modelContextMap = map;
+        }).catch(function() { _modelContextMap = {}; });
     }
 
     async function loadConfigFromBackend() {
@@ -1114,8 +1283,9 @@ window.showToast = function(msg) {
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
     settingsBtn.onclick = openDrawer;
     initialSettingsBtn.onclick = openDrawer;
-    drawerClose.onclick = closeDrawer;
-    drawerOverlay.onclick = function(e) { if (e.target === drawerOverlay) closeDrawer(); };
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.drawer-close-btn')) closeDrawer();
+    });
 
     async function renderDrawer() {
         if (!drawerBody) return;
@@ -1170,13 +1340,7 @@ window.showToast = function(msg) {
         html += '<div class="param-item"><label>' + _('customPort') + '</label><input type="number" id="customPortInput" value="' + customPort + '" min="1" max="65535"></div>';
         html += '<div class="param-item"><label>Agent最大迭代</label><input type="number" id="agentMaxIterInput" value="' + agentMaxIterations + '" min="1" max="50"></div>';
         html += '</div>';
-        html += '<div class="section-title" style="margin-top:20px;">' + _('extraPrompts') + '</div>';
-        html += '<div class="extra-prompts-section" id="extraPromptsSection">';
-        if (currentThinkMode === 'fast') { html += '<div class="extra-prompt-item"><span class="extra-prompt-label">' + _('fastMode') + '</span><span class="extra-prompt-value">' + _('fastDesc') + '</span></div>'; }
-        else if (currentThinkMode === 'think') { html += '<div class="extra-prompt-item"><span class="extra-prompt-label">' + _('thinkModeDesc') + '</span><span class="extra-prompt-value">' + _('thinkDesc') + '</span></div>'; }
-        else if (currentThinkMode === 'deep') { html += '<div class="extra-prompt-item"><span class="extra-prompt-label">' + _('deepMode') + '</span><span class="extra-prompt-value">' + _('deepDesc') + '</span></div>'; }
-        else if (currentThinkMode === 'meditate') { html += '<div class="extra-prompt-item"><span class="extra-prompt-label">' + _('meditateMode') + '</span><span class="extra-prompt-value">' + _('meditateDesc') + '</span></div>'; }
-        html += '</div>';
+        
         drawerBody.innerHTML = html;
 
         drawerBody.querySelectorAll('.provider-card').forEach(function(card) {
@@ -1350,6 +1514,30 @@ window.showToast = function(msg) {
         }
         return '<div class="think-block' + collapsedClass + '" style="margin-left:-12px;"><div class="think-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><div class="think-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg></div><span>' + titleText + '</span>' + (tokenStr ? '<span class="pb-tokens">' + tokenStr + '</span>' : '') + '<div class="think-arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg></div></div><div class="think-body-wrapper"><div class="think-line"></div><div class="think-content' + contentSuffix + '">' + escapeHtml(displayReasoning).replace(/\n/g, '<br>') + '</div></div></div>';
     }
+
+    window.toggleThinkBlock = function(header) {
+        var block = header.parentElement;
+        var wrapper = block.querySelector('.think-body-wrapper');
+        if (!wrapper) return;
+        wrapper.style.transition = 'max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease';
+        if (block.classList.contains('collapsed')) {
+            var h = wrapper.scrollHeight + 10;
+            wrapper.style.maxHeight = '0px';
+            block.classList.remove('collapsed');
+            void wrapper.offsetHeight;
+            wrapper.style.maxHeight = h + 'px';
+            wrapper.style.opacity = '1';
+            setTimeout(function() { wrapper.style.maxHeight = ''; wrapper.style.transition = ''; }, 400);
+        } else {
+            var h = wrapper.scrollHeight;
+            wrapper.style.maxHeight = h + 'px';
+            void wrapper.offsetHeight;
+            block.classList.add('collapsed');
+            wrapper.style.maxHeight = '0';
+            wrapper.style.opacity = '0';
+            setTimeout(function() { wrapper.style.transition = ''; }, 400);
+        }
+    };
 
     function createMessageBubble(content, role, images, reasoning, msgRef, cotHtml) {
         var bubble = document.createElement('div');
@@ -2269,9 +2457,11 @@ window.showToast = function(msg) {
         if (!_pendingAsk) return;
         var data = _pendingAsk;
         _pendingAsk = null;
-        // Remove existing overlay if any
         var existing = document.querySelector('.ask-overlay');
         if (existing) existing.remove();
+        var ta = isChatActive ? chatText : initText;
+        var container = isChatActive ? document.getElementById('bottomInputContainer') : (ta ? ta.closest('.center-initial') : null);
+        if (!container || !container.offsetParent) container = document.querySelector('.input-wrapper-outer')?.closest('.bottom-input-container, .center-initial') || document.body;
         var overlay = document.createElement('div');
         overlay.className = 'ask-overlay';
         var optionsHtml = data.options.map(function(o) {
@@ -2279,14 +2469,20 @@ window.showToast = function(msg) {
         }).join('');
         overlay.innerHTML = '<div class="ask-panel"><div class="ask-panel-question">' + escapeHtml(data.question) + '</div><div class="ask-panel-options">' + optionsHtml + '<button class="ask-option-btn ask-option-none">什么都不选</button></div></div>';
         document.body.appendChild(overlay);
+        var cr = container.getBoundingClientRect();
+        var pw = Math.min(cr.width, 600);
+        var left = cr.left + cr.width / 2 - pw / 2;
+        if (left < 10) { left = 10; pw = cr.width - 20; }
+        overlay.style.width = pw + 'px';
+        overlay.style.left = left + 'px';
+        overlay.style.bottom = (window.innerHeight - cr.top + 12) + 'px';
         requestAnimationFrame(function() { overlay.classList.add('active'); });
         overlay.querySelectorAll('.ask-option-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var answer = this.dataset.value;
                 overlay.classList.remove('active');
                 setTimeout(function() { overlay.remove(); }, 200);
-                if (!answer) return; // "什么都不选" has no data-value
-                // Mark this ask as used
+                if (!answer) return;
                 if (data.question) {
                     _usedAsks[data.question] = true;
                     document.querySelectorAll('.ask-block').forEach(function(el) {
@@ -2297,7 +2493,6 @@ window.showToast = function(msg) {
                     });
                     saveSettingsToLocal();
                 }
-                // Add answer as user message and send
                 var ta = isChatActive ? chatText : initText;
                 ta.value = answer;
                 updateSendBtn();

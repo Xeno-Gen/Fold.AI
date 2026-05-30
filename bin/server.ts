@@ -83,6 +83,8 @@ app.use(initUserMiddleware);
 app.use(express.static(path.join(__dirname, '../static')));
 app.use('/plugins', express.static(path.join(__dirname, '../Plugin')));
 app.use('/com', express.static(path.join(__dirname, '../com')));
+// 公开 config 目录（用于 context.txt 等配置资源）
+app.use('/config', express.static(path.join(__dirname, '../config')));
 // 公开工作目录文件链接
 app.use('/cwd', express.static(path.join(__dirname, '../../cwd')));
 
