@@ -332,6 +332,7 @@ const MainApp = {
     // === DRAWER SETTINGS ===
     function openDrawer() { showDrawer.value = true; }
     function closeDrawer() { showDrawer.value = false; }
+    function toggleDrawer() { showDrawer.value = !showDrawer.value; }
 
     function selectProvider(id: string) {
       currentProvider.value = id;
@@ -660,7 +661,7 @@ const MainApp = {
       showSettingsModal, closeSettingsModal, openSettingsModal,
       showFileBrowser, openFileBrowser, closeFileBrowser,
       showFileViewer, closeFileViewer,
-      showDrawer, openDrawer, closeDrawer,
+      showDrawer, openDrawer, closeDrawer, toggleDrawer,
       showDeepThinkPopup, toggleDeepThinkPopup, deepThinkPopupStyle,
       showModelPicker, modelPickerStyle, openModelPicker,
       onSelectThinkMode, onSelectModel,

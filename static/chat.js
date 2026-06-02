@@ -57,6 +57,8 @@
         var dangerous = [/rm\s+-rf/i, /(?:^|[&|;])\s*format\s+[a-z]:/i, /del\s+\/f/i, /rd\s+\/s/i, /shutdown/i, /sudo\s+rm\s+-rf/i, />\s*\/dev\/sda/i, /dd\s+if=/i, /:\(\)\s*\{/i];
         for (var ci = 0; ci < commands.length; ci++) {
             var cmd = commands[ci];
+            // 如果已中断，跳过剩余命令
+            if (currentAbortController && currentAbortController.signal.aborted) break;
             if (dangerous.some(function(p) { return p.test(cmd.command); })) {
                 var msg = { role: 'tool', content: _('dangerousBlocked') + cmd.command, images: [], _isExec: true };
                 chats[currentChat].push(msg);
@@ -89,7 +91,8 @@
             chats[currentChat].push(execMsg);
             try {
                 var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir;
-                var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true, requestId: currentRequestId }) });
+                var abortSignal = currentAbortController ? currentAbortController.signal : undefined;
+                var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true, requestId: currentRequestId }), signal: abortSignal });
                 var sysMsg;
                 var resultTitle, resultBody;
                 if (res.ok) {
@@ -564,7 +567,7 @@
                         iterMsgs.push({ role: 'user', content: '[视频帧: ' + vf.fileName + ']', images: [vf.content] });
                     });
                 }
-                // 插件状态 — 实时展示开关状态
+                // 插件状态拼接到已有的基础提示词 system 消息中（归类到基础提示词）
                 var statusLines = [];
                 statusLines.push('- 命令执行: ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? '开启' : '关闭'));
                 statusLines.push('- 记忆: ' + (typeof memoryEnabled !== 'undefined' && memoryEnabled ? '开启' : '关闭'));
@@ -573,9 +576,14 @@
                 statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? '开启' : '关闭'));
                 statusLines.push('- 思维链注入: ' + (typeof cothinkEnabled !== 'undefined' && cothinkEnabled ? '开启' : '关闭'));
                 var statusText = '[当前插件状态]\n' + statusLines.join('\n');
-                var sysCount2 = 0;
-                while (sysCount2 < iterMsgs.length && iterMsgs[sysCount2].role === 'system') sysCount2++;
-                iterMsgs.splice(sysCount2, 0, { role: 'system', content: statusText, images: [] });
+                // 拼接到最后一条 system 消息（服务器已拼接了系统版本和上下文容量）
+                var sysMsgs = iterMsgs.filter(function(m) { return m.role === 'system'; });
+                if (sysMsgs.length > 0) {
+                    var lastSys = sysMsgs[sysMsgs.length - 1];
+                    lastSys.content = statusText + '\n\n' + lastSys.content;
+                } else {
+                    iterMsgs.unshift({ role: 'system', content: statusText, images: [] });
+                }
 
                 // 记忆作为独立 system 消息，排在所有 system 消息之后、用户消息之前
                 if (memoryEnabled && cachedMemories.length > 0) {

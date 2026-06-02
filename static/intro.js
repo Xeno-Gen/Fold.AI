@@ -1199,8 +1199,9 @@ async function openFileInBrowser(filePath) {
 
     function openDrawer() { drawerOverlay.classList.add('active'); loadConfigFromBackend().then(function() { renderDrawer(); }); }
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
-    settingsBtn.onclick = openDrawer;
-    initialSettingsBtn.onclick = openDrawer;
+    function toggleDrawer() { if (drawerOverlay.classList.contains('active')) closeDrawer(); else openDrawer(); }
+    settingsBtn.onclick = toggleDrawer;
+    initialSettingsBtn.onclick = toggleDrawer;
     document.addEventListener('click', function(e) {
         if (e.target.closest('.drawer-close-btn')) closeDrawer();
     });

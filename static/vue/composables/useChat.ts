@@ -238,18 +238,24 @@ export function useChat() {
           }
         }
 
-        // Add plugin status
+        // 插件状态拼接到已有的基础提示词 system 消息中（归类到基础提示词）
         const statusLines = [
           '- 命令执行: ' + (commandExecEnabled.value ? '开启' : '关闭'),
           '- 记忆: ' + (memoryEnabled.value ? '开启' : '关闭'),
+          '- 安全沙箱: ' + (sandboxEnabled.value ? '开启' : '关闭'),
+          '- 模型提问: ' + (askEnabled.value ? '开启' : '关闭'),
           '- Agent: ' + (agentEnabled.value ? '开启' : '关闭'),
+          '- 思维链注入: ' + (cothinkEnabled.value ? '开启' : '关闭'),
         ];
-        let sysCount = iterMsgs.filter((m: any) => m.role === 'system').length;
-        iterMsgs.splice(sysCount, 0, {
-          role: 'system',
-          content: '[当前插件状态]\n' + statusLines.join('\n'),
-          images: [],
-        });
+        const statusText = '[当前插件状态]\n' + statusLines.join('\n');
+        // 拼接到最后一条 system 消息（服务器已拼接了系统版本和上下文容量）
+        const sysMsgs = iterMsgs.filter((m: any) => m.role === 'system');
+        if (sysMsgs.length > 0) {
+          const lastSys = sysMsgs[sysMsgs.length - 1];
+          lastSys.content = statusText + '\n\n' + lastSys.content;
+        } else {
+          iterMsgs.unshift({ role: 'system', content: statusText, images: [] });
+        }
 
         // Add memories
         if (memoryEnabled.value && cachedMemories.value.length > 0) {
@@ -354,6 +360,9 @@ export function useChat() {
     if (commands.length === 0) return false;
 
     for (const cmd of commands) {
+      // 如果已中断，跳过剩余命令
+      if (currentAbortController.value?.signal.aborted) break;
+
       if (dangerousPatterns.some(p => p.test(cmd.command))) {
         const msg = { role: 'tool', content: '⚠️ 危险命令已被阻止: ' + cmd.command, images: [], _isExec: true };
         chats.value[currentChat.value].push(msg);
@@ -375,7 +384,12 @@ export function useChat() {
         const res = await fetch('/api/plugin/command/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ shell: cmd.shell, command: cmd.command }),
+          body: JSON.stringify({
+            shell: cmd.shell,
+            command: cmd.command,
+            requestId: currentRequestId.value,
+          }),
+          signal: currentAbortController.value?.signal,
         });
         if (res.ok) {
           const data = await res.json();

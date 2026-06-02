@@ -1,6 +1,7 @@
 module.exports = function(context) {
     const express = require('express');
     const { exec, spawn } = require('child_process');
+    // spawn 用于流式执行命令，超时重置
     const os = require('os');
     const path = require('path');
     const fs = require('fs');
@@ -30,38 +31,67 @@ module.exports = function(context) {
         } catch (e) { return null; }
     }
 
-    // ---- 执行命令并标记末尾 ----
-    function execWithMarker(psPath, scriptContent, workDir, timeout) {
-        return new Promise((resolve, reject) => {
-            const marker = '__EX_DONE_' + Date.now().toString(36) + '__';
-            // 在脚本末尾追加 marker 输出
-            const fullScript = scriptContent + '\r\nWrite-Host "' + marker + '"\r\n';
-            const tmpFile = path.join(workDir, '_ps_tmp_' + Date.now() + '.ps1');
-            fs.writeFileSync(tmpFile, '﻿' + fullScript, 'utf-8');
+    // ---- 使用 spawn 执行命令，每有新行输出重置超时 ----
+    // markerCmd: 用于输出标记的命令模板，默认为 PowerShell 的 Write-Host
+    // 返回 { promise, child }，child 用于外部中断
+    function spawnWithOutput(exe, args, scriptContent, workDir, timeout, tmpFile, marker, markerCmd) {
+        const markerLine = (markerCmd || 'Write-Host') + ' "' + marker + '"';
+        const fullScript = scriptContent + '\r\n' + markerLine + '\r\n';
+        fs.writeFileSync(tmpFile, '﻿' + fullScript, 'utf-8');
 
-            const child = exec('"' + psPath + '" -NoProfile -ExecutionPolicy Bypass -File "' + tmpFile + '"', {
-                timeout: timeout || 30000,
-                cwd: workDir,
-                maxBuffer: 10 * 1024 * 1024,
-                windowsHide: true,
-                encoding: 'buffer',
-            }, (error, stdout, stderr) => {
-                try { fs.unlinkSync(tmpFile); } catch (e) {}
-                const decode = (buf) => !buf || buf.length === 0 ? '' : new TextDecoder('utf-8', { fatal: false }).decode(buf);
-                let out = decode(stdout);
-                let err = decode(stderr);
-                // 去掉 marker 行
-                const mi = out.lastIndexOf(marker);
-                if (mi !== -1) out = out.substring(0, mi).replace(/\r?\n$/, '');
-                resolve({
-                    stdout: out,
-                    stderr: err,
-                    exitCode: error ? (error.code || 1) : 0,
-                    duration: timeout || 30000,
-                });
-            });
-            return child;
+        const child = spawn(exe, args, {
+            cwd: workDir,
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
         });
+
+        let stdout = '';
+        let stderr = '';
+        let completed = false;
+        let timer;
+
+        function resetTimer() {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                if (!completed) {
+                    try { child.kill('SIGTERM'); } catch (e) { try { child.kill(); } catch (e2) {} }
+                }
+            }, timeout);
+        }
+
+        resetTimer();
+
+        child.stdout.on('data', (data) => {
+            const str = data.toString();
+            stdout += str;
+            if (str.includes('\n')) resetTimer();
+        });
+
+        child.stderr.on('data', (data) => {
+            const str = data.toString();
+            stderr += str;
+            if (str.includes('\n')) resetTimer();
+        });
+
+        child.on('close', (code) => {
+            completed = true;
+            clearTimeout(timer);
+            try { fs.unlinkSync(tmpFile); } catch (e) {}
+            const mi = stdout.lastIndexOf(marker);
+            if (mi !== -1) stdout = stdout.substring(0, mi).replace(/\r?\n$/, '');
+            if (_resolve) _resolve({ stdout, stderr, exitCode: code === null ? 1 : code });
+        });
+
+        child.on('error', () => {
+            completed = true;
+            clearTimeout(timer);
+            try { fs.unlinkSync(tmpFile); } catch (e) {}
+            if (_resolve) _resolve({ stdout, stderr, exitCode: 1 });
+        });
+
+        let _resolve;
+        const promise = new Promise((resolve) => { _resolve = resolve; });
+        return { promise, child };
     }
 
     function killUserSession(userToken) {
@@ -78,16 +108,18 @@ module.exports = function(context) {
         const userToken = req.userToken;
 
         if (requestId) {
-            const child = runningProcs.get(requestId);
-            if (child) {
-                try { child.kill('SIGTERM'); } catch (e) { try { child.kill(); } catch (e2) {} }
+            const entry = runningProcs.get(requestId);
+            if (entry && entry.child) {
+                try { entry.child.kill('SIGTERM'); } catch (e) { try { entry.child.kill(); } catch (e2) {} }
                 runningProcs.delete(requestId);
             }
         }
         if (userToken) {
             killUserSession(userToken);
-            for (const [rid, child] of runningProcs) {
-                try { child.kill(); } catch (e) {}
+            for (const [rid, entry] of runningProcs) {
+                if (entry && entry.child) {
+                    try { entry.child.kill(); } catch (e) {}
+                }
                 runningProcs.delete(rid);
             }
         }
@@ -187,38 +219,49 @@ module.exports = function(context) {
         let effectiveWorkDir = prevCwd || workDir;
         if (!fs.existsSync(effectiveWorkDir)) effectiveWorkDir = workDir;
 
-        let psScript;
+        const marker = '__EX_DONE_' + Date.now().toString(36) + '__';
+        let result;
+
         if (shell === 'powershell') {
-            psScript = 'chcp 65001 > $null\r\n' +
+            const psScript = 'chcp 65001 > $null\r\n' +
                 '[Console]::InputEncoding = [System.Text.Encoding]::UTF8\r\n' +
                 '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n' +
                 '$OutputEncoding = [System.Text.Encoding]::UTF8\r\n' +
                 "$PSDefaultParameterValues['*:Encoding'] = 'utf8'\r\n" +
                 'Set-Location "' + effectiveWorkDir.replace(/"/g, '""') + '"\r\n' +
                 command;
+            const tmpFile = path.join(workDir, '_ps_tmp_' + Date.now() + '.ps1');
+            const { promise, child } = spawnWithOutput(
+                psPath,
+                ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tmpFile],
+                psScript, effectiveWorkDir, execTimeout, tmpFile, marker
+            );
+            const procEntry = { child, tmpFile };
+            if (requestId) runningProcs.set(requestId, procEntry);
+            result = await promise;
+            if (requestId) runningProcs.delete(requestId);
         } else {
-            // CMD：通过 cmd /c 执行，&& 在单引号内 PS 不解析
-            const safe = command.replace(/'/g, "''");
-            psScript = 'chcp 65001 > $null\r\n' +
-                '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n' +
-                '$OutputEncoding = [System.Text.Encoding]::UTF8\r\n' +
-                'Set-Location "' + effectiveWorkDir.replace(/"/g, '""') + '"\r\n' +
-                "cmd /c '" + safe + "'";
+            // CMD：直接用 cmd.exe + .bat 文件执行
+            const cmdPath = sysRoot + '\\System32\\cmd.exe';
+            const cmdScript = '@echo off\r\nchcp 65001 > nul\r\ncd /d "' + effectiveWorkDir + '"\r\n' + command + '\r\n';
+            const tmpFile = path.join(workDir, '_cmd_tmp_' + Date.now() + '.bat');
+            const { promise, child } = spawnWithOutput(
+                cmdPath,
+                ['/c', tmpFile],
+                cmdScript, effectiveWorkDir, execTimeout, tmpFile, marker, 'ECHO'
+            );
+            const procEntry = { child, tmpFile };
+            if (requestId) runningProcs.set(requestId, procEntry);
+            result = await promise;
+            if (requestId) runningProcs.delete(requestId);
         }
-
-        // 执行并保存工作目录状态
-        const child = await execWithMarker(psPath, psScript, effectiveWorkDir, execTimeout);
-        if (requestId) runningProcs.set(requestId, child);
 
         // 保存工作目录（持久化 cd 效果）
         writeSessionState(req.userToken, effectiveWorkDir);
 
-        // 如果有 requestId，在 runningProcs 里删掉
-        if (requestId) runningProcs.delete(requestId);
-
         const duration = Date.now() - startTime;
-        context.logger.info('[exec] ' + shell + ' exit=' + child.exitCode + ' dur=' + duration + 'ms');
-        res.json(child);
+        context.logger.info('[exec] ' + shell + ' exit=' + result.exitCode + ' dur=' + duration + 'ms');
+        res.json(result);
 
         function finishExec(error, stdout, stderr) {
             const duration = Date.now() - startTime;
