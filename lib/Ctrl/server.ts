@@ -4,10 +4,10 @@ import fs from 'fs';
 import { ctrlState } from './state';
 import { logger } from '../logger';
 
-const CTRL_PORT = 17922;
 const USERS_DIR = path.join(__dirname, '../../data/users');
 
-export function startCtrlServer() {
+export function startCtrlServer(port?: number) {
+  const CTRL_PORT = port || 17922;
   const app = express();
   app.use(express.json());
 

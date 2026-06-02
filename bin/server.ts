@@ -255,4 +255,4 @@ const server = app.listen(PORT, envData.LISTEN || '0.0.0.0', () => {
     logger.info(`Fold.AI server running on http://${envData.LISTEN || '0.0.0.0'}:${PORT}`);
 });
 
-startCtrlServer();
+startCtrlServer(parseInt(envData.CTRL_PORT) || 17922);

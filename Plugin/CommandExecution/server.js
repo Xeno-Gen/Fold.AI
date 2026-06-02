@@ -34,10 +34,11 @@ module.exports = function(context) {
     // ---- 使用 spawn 执行命令，每有新行输出重置超时 ----
     // markerCmd: 用于输出标记的命令模板，默认为 PowerShell 的 Write-Host
     // 返回 { promise, child }，child 用于外部中断
-    function spawnWithOutput(exe, args, scriptContent, workDir, timeout, tmpFile, marker, markerCmd) {
+    function spawnWithOutput(exe, args, scriptContent, workDir, timeout, tmpFile, marker, markerCmd, noBom) {
         const markerLine = (markerCmd || 'Write-Host') + ' "' + marker + '"';
         const fullScript = scriptContent + '\r\n' + markerLine + '\r\n';
-        fs.writeFileSync(tmpFile, '﻿' + fullScript, 'utf-8');
+        const prefix = noBom ? '' : '﻿';
+        fs.writeFileSync(tmpFile, prefix + fullScript, 'utf-8');
 
         const child = spawn(exe, args, {
             cwd: workDir,
@@ -77,8 +78,17 @@ module.exports = function(context) {
             completed = true;
             clearTimeout(timer);
             try { fs.unlinkSync(tmpFile); } catch (e) {}
-            const mi = stdout.lastIndexOf(marker);
-            if (mi !== -1) stdout = stdout.substring(0, mi).replace(/\r?\n$/, '');
+            // 去掉 marker 及其痕迹（CMD 的 ECHO 会输出引号，Write-Host 不会）
+            const markerQuoted = '"' + marker + '"';
+            let mi = stdout.lastIndexOf(markerQuoted);
+            if (mi !== -1) {
+                stdout = stdout.substring(0, mi).replace(/\r?\n$/, '');
+            } else {
+                mi = stdout.lastIndexOf(marker);
+                if (mi !== -1) {
+                    stdout = stdout.substring(0, mi).replace(/\r?\n$/, '');
+                }
+            }
             if (_resolve) _resolve({ stdout, stderr, exitCode: code === null ? 1 : code });
         });
 
@@ -241,18 +251,52 @@ module.exports = function(context) {
             result = await promise;
             if (requestId) runningProcs.delete(requestId);
         } else {
-            // CMD：直接用 cmd.exe + .bat 文件执行
+            // CMD：直接用 cmd.exe + .bat 文件执行，显示命令本身但不显示标记
             const cmdPath = sysRoot + '\\System32\\cmd.exe';
-            const cmdScript = '@echo off\r\nchcp 65001 > nul\r\ncd /d "' + effectiveWorkDir + '"\r\n' + command + '\r\n';
             const tmpFile = path.join(workDir, '_cmd_tmp_' + Date.now() + '.bat');
-            const { promise, child } = spawnWithOutput(
-                cmdPath,
-                ['/c', tmpFile],
-                cmdScript, effectiveWorkDir, execTimeout, tmpFile, marker, 'ECHO'
-            );
+            const fullScript = '@chcp 65001 > nul\r\n' + command + '\r\n';
+            fs.writeFileSync(tmpFile, fullScript, 'utf-8');
+
+            const child = spawn(cmdPath, ['/c', tmpFile], {
+                cwd: effectiveWorkDir,
+                windowsHide: true,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+
+            let cmdStdout = '';
+            let cmdStderr = '';
+            let cmdCompleted = false;
+            let cmdTimer;
+
+            function resetCmdTimer() {
+                if (cmdTimer) clearTimeout(cmdTimer);
+                cmdTimer = setTimeout(() => {
+                    if (!cmdCompleted) { try { child.kill('SIGTERM'); } catch (e) { try { child.kill(); } catch (e2) {} } }
+                }, execTimeout);
+            }
+            resetCmdTimer();
+
+            child.stdout.on('data', (data) => { cmdStdout += data.toString(); if (data.toString().includes('\n')) resetCmdTimer(); });
+            child.stderr.on('data', (data) => { cmdStderr += data.toString(); if (data.toString().includes('\n')) resetCmdTimer(); });
+
+            const cmdProcessPromise = new Promise((resolve) => {
+                child.on('close', (code) => {
+                    cmdCompleted = true;
+                    clearTimeout(cmdTimer);
+                    try { fs.unlinkSync(tmpFile); } catch (e) {}
+                    resolve({ stdout: cmdStdout, stderr: cmdStderr, exitCode: code === null ? 1 : code });
+                });
+                child.on('error', () => {
+                    cmdCompleted = true;
+                    clearTimeout(cmdTimer);
+                    try { fs.unlinkSync(tmpFile); } catch (e) {}
+                    resolve({ stdout: cmdStdout, stderr: cmdStderr, exitCode: 1 });
+                });
+            });
+
             const procEntry = { child, tmpFile };
             if (requestId) runningProcs.set(requestId, procEntry);
-            result = await promise;
+            result = await cmdProcessPromise;
             if (requestId) runningProcs.delete(requestId);
         }
 
