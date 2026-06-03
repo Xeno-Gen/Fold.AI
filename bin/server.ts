@@ -19,6 +19,7 @@ import { pluginsRouter } from '../lib/routes/plugins';
 import { initPlugins } from '../lib/plugin/loader';
 import { logger } from '../lib/logger';
 import { startCtrlServer } from '../lib/Ctrl/server';
+import { ctrlState } from '../lib/Ctrl/state';
 
 // 多路径查找 .env：当前目录 > 当前目录/config > 包目录/config > 包目录
 const pkgDir = path.join(__dirname, '..');
@@ -75,6 +76,16 @@ logger.info('System version: ' + sysVersion);
 const app = express();
 const PORT = parseInt(envData.PORT) || parseInt(envData.POST) || 3000;
 
+// 信任反向代理 (nginx 等)，使 req.ip 获取真实客户端 IP
+app.set('trust proxy', true);
+
+// 请求日志中间件 — 记录每个请求的 IP、方法和路径
+app.use((req, res, next) => {
+    const ip = req.ip?.replace('::ffff:', '').replace('::1', '127.0.0.1') || req.socket.remoteAddress || 'unknown';
+    logger.info(`[ACCESS] ${ip} ${req.method} ${req.path}`);
+    next();
+});
+
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(cookieParser());
@@ -126,6 +137,8 @@ function resolveWorkPath(subPath: string, workDir?: string): string {
 
 // 浏览工作目录
 app.get('/api/files/browse', (req, res) => {
+            if (ctrlState.disableWorkDir) return res.status(403).json({ error: '\u5de5\u4f5c\u76ee\u5f55\u5df2\u88ab\u7ba1\u7406\u5458\u7981\u7528' });
+
     try {
         const workDir = (req.query.workingDirectory as string) || undefined;
         const dirPath = resolveWorkPath(req.query.dir as string || '', workDir);
@@ -150,6 +163,8 @@ app.get('/api/files/browse', (req, res) => {
 
 // 读取工作目录文件
 app.get('/api/files/read', (req, res) => {
+            if (ctrlState.disableWorkDir) return res.status(403).json({ error: '\u5de5\u4f5c\u76ee\u5f55\u5df2\u88ab\u7ba1\u7406\u5458\u7981\u7528' });
+
     try {
         const workDir = (req.query.workingDirectory as string) || undefined;
         const filePath = resolveWorkPath(req.query.file as string || '', workDir);
@@ -178,6 +193,8 @@ app.get('/api/files/read', (req, res) => {
 
 // 删除文件
 app.delete('/api/files/delete', (req, res) => {
+            if (ctrlState.disableWorkDir) return res.status(403).json({ error: '\u5de5\u4f5c\u76ee\u5f55\u5df2\u88ab\u7ba1\u7406\u5458\u7981\u7528' });
+
     try {
         const workDir = (req.query.workingDirectory as string) || undefined;
         const filePath = resolveWorkPath(req.query.file as string || '', workDir);
@@ -191,6 +208,8 @@ app.delete('/api/files/delete', (req, res) => {
 
 // 重命名文件
 app.post('/api/files/rename', (req, res) => {
+            if (ctrlState.disableWorkDir) return res.status(403).json({ error: '\u5de5\u4f5c\u76ee\u5f55\u5df2\u88ab\u7ba1\u7406\u5458\u7981\u7528' });
+
     try {
         const workDir = (req.query.workingDirectory as string) || undefined;
         const oldPath = resolveWorkPath(req.body.file as string, workDir);

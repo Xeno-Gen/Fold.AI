@@ -327,10 +327,10 @@
         [data-theme="dark"] .model-ctx-badge{background:#2a2a2a;color:#999;}
 
         .char-count{font-size:10px;color:#aaa;user-select:none;margin-right:4px;white-space:nowrap;}
-        .image-preview-area{display:flex;gap:8px;padding:2px 14px 6px;flex-wrap:wrap;max-height:76px;overflow-y:auto;}
-        .image-preview-item{
-            width:44px;height:44px;border-radius:6px;background-size:cover;background-position:center;
-            border:1px solid #e6e6e6;position:relative;
+        .image-preview-area{display:flex;gap:6px;padding:6px 14px 2px;flex-wrap:wrap;max-height:120px;overflow-y:auto;min-height:0;}
+        .image-preview-area:empty{padding:0;}
+        .image-preview-item,.file-preview-item{
+            border-radius:6px;border:1px solid #e0e0e0;position:relative;flex-shrink:0;
         }
         .remove-preview{
             position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
@@ -788,8 +788,7 @@
                 <div class="title-beam"></div>
             </div>
             <div class="input-wrapper-outer">
-                <div class="input-inner-area"><textarea class="input-textarea" id="initialTextarea" data-i18n-placeholder="initialPlaceholder" placeholder="输入您的问题..." rows="2"></textarea></div>
-                <div class="image-preview-area" id="initialImagePreview"></div>
+                <div class="input-inner-area"><div class="image-preview-area" id="initialImagePreview"></div><textarea class="input-textarea" id="initialTextarea" data-i18n-placeholder="initialPlaceholder" placeholder="输入您的问题..." rows="2"></textarea></div>
                 <div class="input-toolbar">
                     <div class="toolbar-left">
                         <button class="tool-btn" id="initialAttachBtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>
@@ -819,8 +818,7 @@
 
         <div class="bottom-input-container" id="bottomInputContainer">
             <div class="input-wrapper-outer">
-                <div class="input-inner-area"><textarea class="input-textarea" id="chatTextarea" data-i18n-placeholder="chatPlaceholder" placeholder="继续输入您的问题..." rows="2"></textarea></div>
-                <div class="image-preview-area" id="chatImagePreview"></div>
+                <div class="input-inner-area"><div class="image-preview-area" id="chatImagePreview"></div><textarea class="input-textarea" id="chatTextarea" data-i18n-placeholder="chatPlaceholder" placeholder="继续输入您的问题..." rows="2"></textarea></div>
                 <div class="input-toolbar">
                     <div class="toolbar-left">
                         <button class="tool-btn" id="chatAttachBtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>

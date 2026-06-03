@@ -66,6 +66,7 @@ window.showToast = function(msg) {
     var lastScrollTop = 0;
     var baseSystemPrompt = '';
     var baseSystemTokenCount = 0;
+    var systemVersion = '';
     var defaultWorkDir = '';
     var pluginPrompts = {};
     var pinnedChats = new Set();
@@ -922,25 +923,30 @@ async function openFileInBrowser(filePath) {
         container.innerHTML = '';
         fileList.forEach((file, idx) => {
             const wrap = document.createElement('div');
+            wrap.className = 'file-preview-item';
+            wrap.style.cssText = 'position:relative;width:52px;height:52px;border-radius:6px;overflow:hidden;border:1px solid #e0e0e0;cursor:pointer;flex-shrink:0;';
             if (file.type === 'image') {
+                wrap.style.backgroundImage = 'url(' + file.content + ')';
+                wrap.style.backgroundSize = 'cover';
+                wrap.style.backgroundPosition = 'center';
             } else if (file.type === 'video') {
-                wrap.className = 'file-preview-item';
+                wrap.style.background = '#f0f0f0';
                 wrap.innerHTML =
-                    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">' +
+                    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.8" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">' +
                         '<polygon points="23 7 16 12 23 17 23 7"/>' +
                         '<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>' +
                     '</svg>' +
-                    '<span class="file-name">' + escapeHtml(file.fileName) + '</span>';
-                wrap.style.cursor = 'pointer';
-                wrap.onclick = function(e) { if (!e.target.classList.contains('remove-preview')) openFileViewer(file.fileName, file.content); };
-                wrap.className = 'image-preview-item';
-                wrap.style.backgroundImage = 'url(' + file.content + ')';
+                    '<span style="position:absolute;bottom:2px;left:2px;right:2px;font-size:9px;color:#666;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;text-align:center;">' + escapeHtml(file.fileName) + '</span>';
             } else {
-                wrap.className = 'file-preview-item';
-                wrap.innerHTML = '<span class="file-icon">📄</span><span class="file-name">' + escapeHtml(file.fileName) + '</span>';
-                wrap.style.cursor = 'pointer';
-                wrap.onclick = function(e) { if (!e.target.classList.contains('remove-preview')) openFileViewer(file.fileName, file.content); };
+                wrap.style.background = '#f7f7f7';
+                wrap.style.display = 'flex';
+                wrap.style.alignItems = 'center';
+                wrap.style.justifyContent = 'center';
+                wrap.innerHTML =
+                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+                    '<span style="position:absolute;bottom:2px;left:2px;right:2px;font-size:9px;color:#666;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;text-align:center;">' + escapeHtml(file.fileName) + '</span>';
             }
+            wrap.onclick = function(e) { if (!e.target.classList.contains('remove-preview')) openFileViewer(file.fileName, file.content); };
             const btn = document.createElement('span');
             btn.className = 'remove-preview';
             btn.textContent = 'x';
@@ -965,6 +971,62 @@ async function openFileInBrowser(filePath) {
     };
     initialAttachBtn.onclick = function() { fileTarget = { textarea: initText, preview: initPreview }; fileInput.click(); };
     chatAttachBtn.onclick = function() { fileTarget = { textarea: chatText, preview: chatPreview }; fileInput.click(); };
+
+    // ===== 粘贴图片上传 =====
+    function handlePaste(e) {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (!file) continue;
+                const target = e.target.id === 'initialTextarea' ? 'initial' : 'chat';
+                const preview = target === 'initial' ? initPreview : chatPreview;
+                uploadFile(file).then(function(data) {
+                    activeFiles[target].push(data);
+                    renderPreviews(preview, activeFiles[target]);
+                    updateSendBtn();
+                }).catch(function(err) {
+                    showToast(_('uploadFailed') + ': ' + (err.message || _('unknownError')));
+                });
+            }
+        }
+    }
+    initText.addEventListener('paste', handlePaste);
+    chatText.addEventListener('paste', handlePaste);
+
+    // ===== 拖拽上传 =====
+    function setupDragDrop(textareaEl, wrapperEl, previewEl, targetName) {
+        wrapperEl.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            wrapperEl.style.boxShadow = '0 0 0 2px #1a1a1a';
+        });
+        wrapperEl.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            wrapperEl.style.boxShadow = '';
+        });
+        wrapperEl.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            wrapperEl.style.boxShadow = '';
+            const files = e.dataTransfer.files;
+            if (!files.length) return;
+            Array.from(files).forEach(function(f) {
+                uploadFile(f).then(function(data) {
+                    activeFiles[targetName].push(data);
+                    renderPreviews(previewEl, activeFiles[targetName]);
+                    updateSendBtn();
+                }).catch(function(err) {
+                    showToast(_('uploadFailed') + ': ' + (err.message || _('unknownError')));
+                });
+            });
+        });
+    }
+    setupDragDrop(initText, initText.closest('.input-wrapper-outer'), initPreview, 'initial');
+    setupDragDrop(chatText, chatText.closest('.input-wrapper-outer'), chatPreview, 'chat');
     var dropdownInstance = null;
     (function() {
         const div = document.createElement('div');
@@ -1074,6 +1136,7 @@ async function openFileInBrowser(filePath) {
             if (data.chatFormat) currentChatFormat = data.chatFormat;
             else updateChatFormatFromProvider();
             if (data.pureMode !== undefined) pureMode = data.pureMode;
+            if (data.systemVersion !== undefined) systemVersion = data.systemVersion;
             if (data.baseSystemPrompt !== undefined) baseSystemPrompt = data.baseSystemPrompt;
             if (data.baseSystemTokenCount !== undefined) baseSystemTokenCount = data.baseSystemTokenCount;
             if (data.pluginPrompts) {
@@ -1522,9 +1585,10 @@ async function openFileInBrowser(filePath) {
         }
         bubble.innerHTML = (cotHtml || '') + reasoningHtml + contentHtml;
 
-        if (images && images.length) {
+        var displayImages = (images && images.length) ? images : (msgRef && msgRef.images && msgRef.images.length ? msgRef.images : null);
+        if (displayImages) {
             var ic = document.createElement('div');
-            images.forEach(function(src) {
+            displayImages.forEach(function(src) {
                 var img = document.createElement('img');
                 img.src = src;
                 img.style.cssText = 'max-width:100%;border-radius:8px;margin-top:8px;';

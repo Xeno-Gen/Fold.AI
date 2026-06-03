@@ -19107,11 +19107,7 @@ ${codeFrame}` : message);
       return r.ok ? r.json() : null;
     },
     async setState(data) {
-      const r = await fetch("/api/state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
+      const r = await fetch("/api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
       return r.ok ? r.json() : null;
     },
     async getUsers() {
@@ -19121,95 +19117,272 @@ ${codeFrame}` : message);
     async deleteUser(token) {
       const r = await fetch("/api/user/" + encodeURIComponent(token), { method: "DELETE" });
       return r.ok ? r.json() : null;
+    },
+    async getLogs() {
+      const r = await fetch("/api/logs");
+      return r.ok ? r.json() : { logs: [] };
     }
   };
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+    return m ? m[1] : "";
+  }
+  function setCookie(name, val) {
+    document.cookie = name + "=" + val + ";path=/;max-age=31536000";
+  }
   var CtrlApp = {
     name: "CtrlPanel",
     template: `
   <div class="ctrl-panel">
-    <div class="ctrl-panel-header">
-      <h2>\u63A7\u5236\u9762\u677F</h2>
+    <div class="ctrl-header">
+      <h2>{{ t('title') }}</h2>
+      <div class="ctrl-header-right">
+        <span class="ctrl-info">{{ t('mode') }}: {{ modeLabel }}</span>
+        <button class="lang-btn" @click="toggleLang">{{ langLabel }}</button>
+        <button class="theme-btn" @click="toggleTheme">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="ctrl-panel-body">
 
-      <div class="settings-item">
-        <div class="settings-item-left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          <div><div>\u5173\u95ED\u6587\u4EF6\u4E0A\u4F20</div><div class="desc">\u7981\u6B62\u7528\u6237\u4E0A\u4F20\u6587\u4EF6\u5230\u670D\u52A1\u5668</div></div>
+    <div class="ctrl-tabs">
+      <button v-for="tab in tabs" :key="tab.id" class="ctrl-tab" :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id">{{ tab.label }}</button>
+    </div>
+
+    <div class="ctrl-body">
+      <!-- \u5E38\u89C4\u8BBE\u7F6E -->
+      <div v-show="activeTab === 'settings'">
+        <div class="ctrl-section">
+          <div class="ctrl-section-title">{{ t('general') }}</div>
+          <div class="ctrl-item">
+            <div class="ctrl-item-left">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <div><div>{{ t('disableUpload') }}</div><div class="desc">{{ t('disableUploadDesc') }}</div></div>
+            </div>
+            <div class="ctrl-toggle">
+              <button class="ctrl-toggle-btn" :class="{ active: !disableFileUpload }" @click="setUpload(false)">{{ t('off') }}</button>
+              <button class="ctrl-toggle-btn" :class="{ active: disableFileUpload }" @click="setUpload(true)">{{ t('on') }}</button>
+            </div>
+          </div>
+          <div class="ctrl-item">
+            <div class="ctrl-item-left">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              <div><div>{{ t('noSaveConv') }}</div><div class="desc">{{ t('noSaveConvDesc') }}</div></div>
+            </div>
+            <div class="ctrl-toggle">
+              <button class="ctrl-toggle-btn" :class="{ active: !disableSaveConversation }" @click="setSave(false)">{{ t('off') }}</button>
+              <button class="ctrl-toggle-btn" :class="{ active: disableSaveConversation }" @click="setSave(true)">{{ t('on') }}</button>
+            </div>
+          </div>
+          <div class="ctrl-item">
+            <div class="ctrl-item-left">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+              <div><div>{{ t('disablePlugins') }}</div><div class="desc">{{ t('disablePluginsDesc') }}</div></div>
+            </div>
+            <div class="ctrl-toggle">
+              <button class="ctrl-toggle-btn" :class="{ active: !disableAllPlugins }" @click="setPlugins(false)">{{ t('off') }}</button>
+              <button class="ctrl-toggle-btn" :class="{ active: disableAllPlugins }" @click="setPlugins(true)">{{ t('on') }}</button>
+            </div>
+          </div>
         </div>
-        <div class="tool-chain-toggle">
-          <button class="tool-chain-option" :class="{ active: !disableFileUpload }" @click="setUpload(false)">\u5173\u95ED</button>
-          <button class="tool-chain-option" :class="{ active: disableFileUpload }" @click="setUpload(true)">\u5F00\u542F</button>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-title">{{ t('workdir') }}</div>
+          <div class="ctrl-item">
+            <div class="ctrl-item-left">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>
+              <div><div>{{ t('disableWorkdir') }}</div><div class="desc">{{ t('disableWorkdirDesc') }}</div></div>
+            </div>
+            <div class="ctrl-toggle">
+              <button class="ctrl-toggle-btn" :class="{ active: !disableWorkDir }" @click="setWorkdir(false)">{{ t('off') }}</button>
+              <button class="ctrl-toggle-btn" :class="{ active: disableWorkDir }" @click="setWorkdir(true)">{{ t('on') }}</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-title">{{ t('ipAccess') }}</div>
+          <div class="ctrl-item">
+            <div class="ctrl-item-left">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <div><div>{{ t('ipAccessMode') }}</div><div class="desc">{{ t('ipAccessDesc') }}</div></div>
+            </div>
+            <div class="ctrl-mode-group">
+              <button v-for="opt in ipOptions" :key="opt.value" class="ctrl-mode-btn" :class="{ active: ipAccessMode === opt.value }" @click="setIPMode(opt.value)">{{ opt.label }}</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-title">{{ t('users') }}</div>
+          <div class="ctrl-item">
+            <div class="ctrl-item-left">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <div><div>{{ t('deleteUser') }}</div><div class="desc">{{ t('deleteUserDesc') }}</div></div>
+            </div>
+            <button class="ctrl-danger-btn" @click="openDeleteDialog">{{ t('delete') }}</button>
+          </div>
         </div>
       </div>
 
-      <div class="settings-item">
-        <div class="settings-item-left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-          <div><div>\u4E0D\u4FDD\u5B58\u7528\u6237\u5BF9\u8BDD</div><div class="desc">\u4E0D\u5728 data \u6587\u4EF6\u5939\u5185\u4FDD\u5B58\u5BF9\u8BDD\u8BB0\u5F55</div></div>
-        </div>
-        <div class="tool-chain-toggle">
-          <button class="tool-chain-option" :class="{ active: !disableSaveConversation }" @click="setSave(false)">\u5173\u95ED</button>
-          <button class="tool-chain-option" :class="{ active: disableSaveConversation }" @click="setSave(true)">\u5F00\u542F</button>
-        </div>
-      </div>
-
-      <div class="settings-item">
-        <div class="settings-item-left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
-          <div><div>\u7981\u7528\u6240\u6709\u63D2\u4EF6</div><div class="desc">\u524D\u7AEF\u63D2\u4EF6\u5173\u95ED\uFF0C\u540E\u7AEF\u4E5F\u4E0D\u6267\u884C\u63D2\u4EF6</div></div>
-        </div>
-        <div class="tool-chain-toggle">
-          <button class="tool-chain-option" :class="{ active: !disableAllPlugins }" @click="setPlugins(false)">\u5173\u95ED</button>
-          <button class="tool-chain-option" :class="{ active: disableAllPlugins }" @click="setPlugins(true)">\u5F00\u542F</button>
+      <!-- \u8BBF\u95EE\u65E5\u5FD7 -->
+      <div v-show="activeTab === 'logs'">
+        <div class="ctrl-section">
+          <div class="ctrl-section-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>{{ t('accessLogs') }}</span>
+            <button class="ctrl-refresh-btn" @click="refreshLogs">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              {{ t('refresh') }}
+            </button>
+          </div>
+          <div class="ctrl-logs">
+            <div v-if="logs.length === 0" class="ctrl-log-empty">{{ t('noLogs') }}</div>
+            <div v-for="(line, i) in logs" :key="i" class="ctrl-log-line">{{ line }}</div>
+          </div>
         </div>
       </div>
-
-      <div class="settings-item" style="border-top:1px solid #f0efeb;margin-top:4px;padding-top:14px;">
-        <div class="settings-item-left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          <div><div>\u5220\u9664\u7528\u6237</div><div class="desc">\u5220\u9664\u6307\u5B9A\u7528\u6237\u7684\u5168\u90E8\u6570\u636E</div></div>
-        </div>
-        <button class="action-btn danger" @click="openDeleteDialog">\u5220\u9664</button>
-      </div>
-
     </div>
   </div>
 
-  <div class="snackbar" :style="{ opacity: snackbarVisible ? 1 : 0 }">{{ snackbarMsg }}</div>
-
-  <div class="dialog-overlay" v-if="showDeleteDialog" @click.self="showDeleteDialog = false">
-    <div class="dialog-card">
-      <h3>\u5220\u9664\u7528\u6237\u6570\u636E</h3>
-      <p style="font-size:13px;color:#666;margin-bottom:12px;">\u9009\u62E9\u8981\u5220\u9664\u7684\u7528\u6237\uFF0C\u6B64\u64CD\u4F5C\u4E0D\u53EF\u6062\u590D\u3002</p>
+  <div class="ctrl-dialog-overlay" v-if="showDeleteDialog" @click.self="showDeleteDialog = false">
+    <div class="ctrl-dialog">
+      <h3>{{ t('deleteUser') }}</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">{{ t('deleteUserHint') }}</p>
       <select v-model="selectedUserToken" v-if="userList.length > 0">
-        <option value="" disabled>\u8BF7\u9009\u62E9\u7528\u6237</option>
+        <option value="" disabled>{{ t('selectUser') }}</option>
         <option v-for="u in userList" :key="u.token" :value="u.token">{{ u.label }}</option>
       </select>
-      <p v-else style="font-size:13px;color:#999;margin-bottom:12px;">\u6682\u65E0\u7528\u6237\u6570\u636E</p>
-      <div class="dialog-actions">
-        <button class="cancel" @click="showDeleteDialog = false">\u53D6\u6D88</button>
-        <button class="confirm-delete" :disabled="!selectedUserToken" @click="confirmDeleteUser">\u786E\u8BA4\u5220\u9664</button>
+      <p v-else style="font-size:13px;color:var(--text2);margin-bottom:12px;">{{ t('noUsers') }}</p>
+      <div class="ctrl-dialog-actions">
+        <button class="cancel" @click="showDeleteDialog = false">{{ t('cancel') }}</button>
+        <button class="confirm" :disabled="!selectedUserToken" @click="confirmDeleteUser">{{ t('confirm') }}</button>
       </div>
     </div>
   </div>
   `,
     setup() {
+      const currentLang = ref(getCookie("fold_ctrl_lang") || "zh");
+      const currentTheme = ref(getCookie("fold_ctrl_theme") || "light");
+      const langData = {
+        zh: {
+          title: "\u63A7\u5236\u9762\u677F",
+          mode: "\u6A21\u5F0F",
+          general: "\u5E38\u89C4",
+          workdir: "\u5DE5\u4F5C\u76EE\u5F55",
+          ipAccess: "IP \u8BBF\u95EE",
+          ipAccessMode: "IP \u8BBF\u95EE\u63A7\u5236",
+          ipAccessDesc: "\u9650\u5236\u53EF\u8BBF\u95EE\u63A7\u5236\u9762\u677F\u7684 IP \u8303\u56F4",
+          disableUpload: "\u7981\u6B62\u6587\u4EF6\u4E0A\u4F20",
+          disableUploadDesc: "\u7528\u6237\u65E0\u6CD5\u4E0A\u4F20\u6587\u4EF6\u5230\u670D\u52A1\u5668",
+          noSaveConv: "\u4E0D\u4FDD\u5B58\u5BF9\u8BDD",
+          noSaveConvDesc: "\u4E0D\u5728 data \u6587\u4EF6\u5939\u4FDD\u5B58\u5BF9\u8BDD\u8BB0\u5F55",
+          disablePlugins: "\u7981\u7528\u5168\u90E8\u63D2\u4EF6",
+          disablePluginsDesc: "\u524D\u7AEF\u4E0E\u540E\u7AEF\u63D2\u4EF6\u5168\u90E8\u7981\u7528",
+          disableWorkdir: "\u7981\u7528\u5DE5\u4F5C\u76EE\u5F55",
+          disableWorkdirDesc: "\u6240\u6709\u5DE5\u4F5C\u76EE\u5F55\u67E5\u8BE2\u8BF7\u6C42\u5C06\u88AB\u62D2\u7EDD",
+          users: "\u7528\u6237\u7BA1\u7406",
+          deleteUser: "\u5220\u9664\u7528\u6237",
+          deleteUserDesc: "\u5220\u9664\u6307\u5B9A\u7528\u6237\u7684\u5168\u90E8\u6570\u636E",
+          delete: "\u5220\u9664",
+          confirm: "\u786E\u8BA4\u5220\u9664",
+          cancel: "\u53D6\u6D88",
+          selectUser: "\u8BF7\u9009\u62E9\u7528\u6237",
+          noUsers: "\u6682\u65E0\u7528\u6237\u6570\u636E",
+          deleteUserHint: "\u9009\u62E9\u8981\u5220\u9664\u7684\u7528\u6237\uFF0C\u6B64\u64CD\u4F5C\u4E0D\u53EF\u6062\u590D\u3002",
+          on: "\u5F00\u542F",
+          off: "\u5173\u95ED",
+          local: "\u4EC5\u672C\u5730",
+          lan: "\u5C40\u57DF\u7F51",
+          open: "\u5B8C\u5168\u5F00\u653E",
+          accessLogs: "\u8BBF\u95EE\u65E5\u5FD7",
+          refresh: "\u5237\u65B0",
+          noLogs: "\u6682\u65E0\u8BBF\u95EE\u8BB0\u5F55"
+        },
+        en: {
+          title: "Control Panel",
+          mode: "Mode",
+          general: "General",
+          workdir: "Working Directory",
+          ipAccess: "IP Access",
+          ipAccessMode: "IP Access Control",
+          ipAccessDesc: "Restrict which IPs can access the panel",
+          disableUpload: "Disable File Upload",
+          disableUploadDesc: "Users cannot upload files to server",
+          noSaveConv: "No Save Conversation",
+          noSaveConvDesc: "Do not save chat history in data folder",
+          disablePlugins: "Disable All Plugins",
+          disablePluginsDesc: "Disable all frontend and backend plugins",
+          disableWorkdir: "Disable Work Directory",
+          disableWorkdirDesc: "All work directory queries will be rejected",
+          users: "User Management",
+          deleteUser: "Delete User",
+          deleteUserDesc: "Delete all data for a user",
+          delete: "Delete",
+          confirm: "Confirm Delete",
+          cancel: "Cancel",
+          selectUser: "Select user",
+          noUsers: "No users",
+          deleteUserHint: "Select a user to delete. This action cannot be undone.",
+          on: "On",
+          off: "Off",
+          local: "Local Only",
+          lan: "LAN Only",
+          open: "Fully Open",
+          accessLogs: "Access Logs",
+          refresh: "Refresh",
+          noLogs: "No access records yet"
+        }
+      };
+      function t(key) {
+        return langData[currentLang.value]?.[key] || key;
+      }
+      const langLabel = computed2(() => currentLang.value === "zh" ? "English" : "\u4E2D\u6587");
+      function toggleLang() {
+        currentLang.value = currentLang.value === "zh" ? "en" : "zh";
+        setCookie("fold_ctrl_lang", currentLang.value);
+      }
+      function applyTheme(t2) {
+        currentTheme.value = t2;
+        document.documentElement.setAttribute("data-theme", t2);
+        setCookie("fold_ctrl_theme", t2);
+      }
+      function toggleTheme() {
+        applyTheme(currentTheme.value === "dark" ? "light" : "dark");
+      }
+      applyTheme(currentTheme.value);
+      const activeTab = ref("settings");
+      const tabs = computed2(() => [
+        { id: "settings", label: t("general") },
+        { id: "logs", label: t("accessLogs") }
+      ]);
       const disableFileUpload = ref(false);
       const disableSaveConversation = ref(false);
       const disableAllPlugins = ref(false);
-      const snackbarMsg = ref("");
-      const snackbarVisible = ref(false);
+      const disableWorkDir = ref(false);
+      const ipAccessMode = ref("local");
+      const toastMsg = ref("");
       const showDeleteDialog = ref(false);
       const userList = ref([]);
       const selectedUserToken = ref("");
-      let snackbarTimer = null;
-      function showSnackbar(msg) {
-        snackbarMsg.value = msg;
-        snackbarVisible.value = true;
-        if (snackbarTimer) clearTimeout(snackbarTimer);
-        snackbarTimer = setTimeout(() => {
-          snackbarVisible.value = false;
+      const logs = ref([]);
+      const ipOptions = [
+        { value: "local", label: t("local") },
+        { value: "lan", label: t("lan") },
+        { value: "open", label: t("open") }
+      ];
+      const modeLabel = computed2(() => {
+        const opt = ipOptions.find((o) => o.value === ipAccessMode.value);
+        return opt ? opt.label : ipAccessMode.value;
+      });
+      let toastTimer = null;
+      function showToast(msg) {
+        const el = document.getElementById("ctrlToast");
+        if (!el) return;
+        el.textContent = msg;
+        el.style.opacity = "1";
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          el.style.opacity = "0";
         }, 2500);
       }
       let syncTimer = null;
@@ -19219,9 +19392,11 @@ ${codeFrame}` : message);
           const result = await api.setState({
             disableFileUpload: disableFileUpload.value,
             disableSaveConversation: disableSaveConversation.value,
-            disableAllPlugins: disableAllPlugins.value
+            disableAllPlugins: disableAllPlugins.value,
+            disableWorkDir: disableWorkDir.value,
+            ipAccessMode: ipAccessMode.value
           });
-          if (result?.success) showSnackbar("\u72B6\u6001\u5DF2\u66F4\u65B0");
+          if (result?.success) showToast(t("mode") + " " + t("on"));
         }, 300);
       }
       async function loadState() {
@@ -19230,18 +19405,28 @@ ${codeFrame}` : message);
           disableFileUpload.value = !!state.disableFileUpload;
           disableSaveConversation.value = !!state.disableSaveConversation;
           disableAllPlugins.value = !!state.disableAllPlugins;
+          disableWorkDir.value = !!state.disableWorkDir;
+          if (state.ipAccessMode) ipAccessMode.value = state.ipAccessMode;
         }
       }
-      function setUpload(val) {
-        disableFileUpload.value = val;
+      function setUpload(v) {
+        disableFileUpload.value = v;
         debouncedSync();
       }
-      function setSave(val) {
-        disableSaveConversation.value = val;
+      function setSave(v) {
+        disableSaveConversation.value = v;
         debouncedSync();
       }
-      function setPlugins(val) {
-        disableAllPlugins.value = val;
+      function setPlugins(v) {
+        disableAllPlugins.value = v;
+        debouncedSync();
+      }
+      function setWorkdir(v) {
+        disableWorkDir.value = v;
+        debouncedSync();
+      }
+      function setIPMode(v) {
+        ipAccessMode.value = v;
         debouncedSync();
       }
       async function openDeleteDialog() {
@@ -19254,30 +19439,49 @@ ${codeFrame}` : message);
         if (!selectedUserToken.value) return;
         const result = await api.deleteUser(selectedUserToken.value);
         if (result?.success) {
-          showSnackbar("\u7528\u6237\u5DF2\u5220\u9664");
+          showToast(t("deleteUser") + " \u2713");
           showDeleteDialog.value = false;
           userList.value = userList.value.filter((u) => u.token !== selectedUserToken.value);
         } else {
-          showSnackbar("\u5220\u9664\u5931\u8D25");
+          showToast(t("deleteUser") + " \u2717");
         }
+      }
+      async function refreshLogs() {
+        const data = await api.getLogs();
+        logs.value = data.logs || [];
+        showToast(t("refresh") + " \u2713");
       }
       onMounted(() => {
         loadState();
+        refreshLogs();
       });
       return {
+        t,
+        langLabel,
+        toggleLang,
+        toggleTheme,
+        activeTab,
+        tabs,
         disableFileUpload,
         disableSaveConversation,
         disableAllPlugins,
-        snackbarMsg,
-        snackbarVisible,
-        showDeleteDialog,
-        userList,
-        selectedUserToken,
+        disableWorkDir,
+        ipAccessMode,
         setUpload,
         setSave,
         setPlugins,
+        setWorkdir,
+        setIPMode,
+        showDeleteDialog,
+        userList,
+        selectedUserToken,
         openDeleteDialog,
-        confirmDeleteUser
+        confirmDeleteUser,
+        ipOptions,
+        modeLabel,
+        logs,
+        refreshLogs,
+        toastMsg
       };
     }
   };

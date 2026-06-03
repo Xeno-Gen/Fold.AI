@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const CONFIG_DIR = path.join(__dirname, '../../Config');
+const CONFIG_DIR = path.join(__dirname, '../../config');
 
 function getLangBase(lang?: string): string {
     if (lang === 'en') {

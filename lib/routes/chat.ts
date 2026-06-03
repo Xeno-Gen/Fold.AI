@@ -7,7 +7,7 @@ import { logger } from '../logger';
 export const chatRouter = Router();
 
 // 系统版本（服务器启动时设置）
-let systemVersion = '';
+export let systemVersion = '';
 
 export function setSystemVersion(ver: string) {
     systemVersion = ver;
@@ -186,7 +186,7 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             messages, provider, model, temperature, top_p, max_tokens,
             seed, frequency_penalty, presence_penalty, top_k, stop, stream,
             chat_template_kwargs, deep_think, thinkMode, chatFormat,
-            requestId: reqId, maxContextTokens
+            requestId: reqId, maxContextTokens, pluginStatus
         } = req.body;
 
         requestId = reqId || null;
@@ -247,36 +247,6 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
         }
 
         if (!isAnthropicFormat) {
-            // OpenAI 格式：system prompt 合并到消息中
-            // 从 config/prompts/Zh|En/*.md 读取基础系统提示词
-            const basePrompt = getSystemPrompt(userConfig.promptLang || 'zh');
-            let effectivePrompt = '';
-            // 非纯净模式时加入基础提示词
-            if (!userConfig.pureMode && basePrompt) {
-                effectivePrompt = basePrompt;
-            }
-            if (userConfig.systemPrompt) {
-                effectivePrompt = effectivePrompt
-                    ? effectivePrompt + '\n\n' + userConfig.systemPrompt
-                    : userConfig.systemPrompt;
-            }
-            if (systemVersion) {
-                effectivePrompt = `[用户使用的系统版本: ${systemVersion}]\n${effectivePrompt}`;
-            }
-            if (maxContextTokens) {
-                const ctxStr = maxContextTokens >= 1000000
-                    ? (maxContextTokens / 1000000).toFixed(0) + 'M'
-                    : (maxContextTokens / 1000).toFixed(0) + 'K';
-                effectivePrompt = `目前最大上下文 ${ctxStr} token\n${effectivePrompt}`;
-            }
-            if (effectivePrompt) {
-                if (finalMessages.length > 0 && finalMessages[0].role === 'system') {
-                    finalMessages[0].content = effectivePrompt + '\n\n' + finalMessages[0].content;
-                } else {
-                    finalMessages.unshift({ role: "system", content: effectivePrompt, images: [] });
-                }
-            }
-
             // 将带 images 的消息转换为多模态 content 数组
             const processedMessages = finalMessages.map((msg: any) => {
                 if (!msg.images || msg.images.length === 0) return msg;

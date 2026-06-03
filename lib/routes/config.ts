@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getUserConfig, saveUserConfig, getDefaultSystemPrompt } from '../user/manager';
 import { getSystemPrompt, getPluginPrompts } from '../parser/configparser';
+import { systemVersion } from './chat';
 import path from 'path';
 import fs from 'fs';
 
@@ -48,6 +49,7 @@ configRouter.get('/config', (req: Request, res: Response) => {
         systemPrompt: userConfig.systemPrompt || '',
         chatFormat: userConfig.chatFormat || '',
         pureMode: userConfig.pureMode || false,
+        systemVersion: systemVersion,
         baseSystemPrompt: baseSystemPrompt,
         baseSystemTokenCount: estimateTokens(baseSystemPrompt),
         pluginPrompts: getPluginPrompts(promptLang),

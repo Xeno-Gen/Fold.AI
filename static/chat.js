@@ -392,12 +392,22 @@
 
             // 有文字才显示用户气泡，纯图片不显示
             if (userText) {
-                addMessage(userText, 'user', [], null, userMsg);
+                addMessage(userText, 'user', imgs, null, userMsg);
+            } else if (imgs.length > 0) {
+                // 纯图片上传：创建用户气泡并显示图片
+                addMessage('', 'user', imgs, null, userMsg);
             }
             if (textFiles.length > 0) {
                 textFiles.forEach(function(f) {
-                    chats[currentChat].push({ role: 'tool', content: _('filePrefix') + f.fileName + ']\n' + f.content, _fileCard: true, _fileName: f.fileName });
+                    var msg = { role: 'tool', content: _('filePrefix') + f.fileName + ']\n' + f.content, _fileCard: true, _fileName: f.fileName };
+                    chats[currentChat].push(msg);
+                    // 同时显示文件卡片气泡
+                    addMessage(f.content, 'tool', [], null, msg);
                 });
+            }
+            // 纯视频/图片无文字时，显示 grid 中的卡片
+            if (!userText && (imageFiles.length > 0 || videoFiles.length > 0) && hasCards && grid) {
+                chatAreaInner.appendChild(grid);
             }
             ta.value = '';
             ta.style.height = 'auto';
@@ -567,7 +577,7 @@
                         iterMsgs.push({ role: 'user', content: '[视频帧: ' + vf.fileName + ']', images: [vf.content] });
                     });
                 }
-                // 插件状态拼接到已有的基础提示词 system 消息中（归类到基础提示词）
+                // 构建完整基础提示词（取代服务器端拼接）
                 var statusLines = [];
                 statusLines.push('- 命令执行: ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? '开启' : '关闭'));
                 statusLines.push('- 记忆: ' + (typeof memoryEnabled !== 'undefined' && memoryEnabled ? '开启' : '关闭'));
@@ -576,13 +586,16 @@
                 statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? '开启' : '关闭'));
                 statusLines.push('- 思维链注入: ' + (typeof cothinkEnabled !== 'undefined' && cothinkEnabled ? '开启' : '关闭'));
                 var statusText = '[当前插件状态]\n' + statusLines.join('\n');
-                // 拼接到最后一条 system 消息（服务器已拼接了系统版本和上下文容量）
-                var sysMsgs = iterMsgs.filter(function(m) { return m.role === 'system'; });
-                if (sysMsgs.length > 0) {
-                    var lastSys = sysMsgs[sysMsgs.length - 1];
-                    lastSys.content = statusText + '\n\n' + lastSys.content;
-                } else {
-                    iterMsgs.unshift({ role: 'system', content: statusText, images: [] });
+                var ctxStr = maxContextTokens >= 1000000 ? (maxContextTokens / 1000000).toFixed(0) + 'M' : (maxContextTokens / 1000).toFixed(0) + 'K';
+                if (!pureMode) {
+                    var baseParts = [statusText];
+                    if (systemVersion) baseParts.push('[用户使用的系统版本: ' + systemVersion + ']');
+                    baseParts.push('目前最大上下文 ' + ctxStr + ' token');
+                    if (baseSystemPrompt) baseParts.push(baseSystemPrompt);
+                    if (currentParams.systemPrompt) baseParts.push(currentParams.systemPrompt);
+                    iterMsgs.unshift({ role: 'system', content: baseParts.join('\n\n'), images: [] });
+                } else if (currentParams.systemPrompt) {
+                    iterMsgs.unshift({ role: 'system', content: currentParams.systemPrompt, images: [] });
                 }
 
                 // 记忆作为独立 system 消息，排在所有 system 消息之后、用户消息之前
