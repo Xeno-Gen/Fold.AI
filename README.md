@@ -5,12 +5,13 @@
 [![License](https://img.shields.io/badge/license-MIT-orange)](#license)
 [![npx](https://img.shields.io/badge/npx-11.12.1-blue?logo=npm)](https://www.npmjs.com/package/npx)
 
+由**DeepSeek-V4-Flash**构建
+
 ## 不同语言的Md
 [English README](https://github.com/Xeno-Gen/Fold.AI/edit/main/README-en.md)
 [简体中文 README](https://github.com/Xeno-Gen/Fold.AI)
 
 ## 安装
-目前`Fold.AI`未上线任何包管理器平台，发行版本已被构建为原生JavaScript
 ```
 #1.手动构建项目依赖
 cd fold
