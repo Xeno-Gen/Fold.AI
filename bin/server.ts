@@ -21,6 +21,33 @@ import { logger } from '../lib/logger';
 import { startCtrlServer } from '../lib/Ctrl/server';
 import { ctrlState } from '../lib/Ctrl/state';
 
+// 读取版本信息
+let versionSuffix = '';
+const verPath = path.join(__dirname, '../com/ver.json');
+if (fs.existsSync(verPath)) {
+    try {
+        const verContent = fs.readFileSync(verPath, 'utf-8');
+        const verData = JSON.parse(verContent);
+        versionSuffix = `${verData.ver} | ${verData.stage} | ${verData.intro} | https://github.com/Xeno-Gen/Fold.AI`;
+    } catch (e) {
+        versionSuffix = 'unknown | unknown | unknown | https://github.com/Xeno-Gen/Fold.AI';
+    }
+} else {
+    versionSuffix = '未找到 ver.json | https://github.com/Xeno-Gen/Fold.AI';
+}
+
+const foldArt: string = `
+███████╗ ██████╗ ██╗     ██████╗     █████╗ ██╗
+██╔════╝██╔═══██╗██║     ██╔══██╗   ██╔══██╗██║
+█████╗  ██║   ██║██║     ██║  ██║   ███████║██║
+██╔══╝  ██║   ██║██║     ██║  ██║   ██╔══██║██║
+██║     ╚██████╔╝███████╗██████╔╝   ██║  ██║██║
+╚═╝      ╚═════╝ ╚══════╝╚═════╝    ╚═╝  ╚═╝╚═╝
+${versionSuffix}
+`;
+
+console.log(foldArt);
+
 // 多路径查找 .env：当前目录 > 当前目录/config > 包目录/config > 包目录
 const pkgDir = path.join(__dirname, '..');
 const envCandidates = [

@@ -186,7 +186,8 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             messages, provider, model, temperature, top_p, max_tokens,
             seed, frequency_penalty, presence_penalty, top_k, stop, stream,
             chat_template_kwargs, deep_think, thinkMode, chatFormat,
-            requestId: reqId, maxContextTokens, pluginStatus
+            requestId: reqId, maxContextTokens, pluginStatus,
+            customProviderUrl
         } = req.body;
 
         requestId = reqId || null;
@@ -200,6 +201,10 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
         if (provider) {
             apiKey = getUserProviderKey(req.userToken!, provider);
             baseUrl = getUserProviderUrl(provider);
+            // 自定义提供商：使用前端传入的 URL
+            if (!baseUrl && customProviderUrl) {
+                baseUrl = customProviderUrl;
+            }
             if (!apiKey || !baseUrl) {
                 return res.status(400).json({ error: '提供商未配置或密钥缺失' });
             }

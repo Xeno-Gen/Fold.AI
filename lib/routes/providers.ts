@@ -76,15 +76,24 @@ providersRouter.delete('/provider/:id/key/:index', (req: Request, res: Response)
 // 获取模型列表（使用当前选中密钥）
 providersRouter.get('/provider/:id/models', async (req: Request, res: Response) => {
     const { id } = req.params;
+    let modelsUrl: string | null = null;
     const provider = providersList.find(p => p.id === id);
-    if (!provider) return res.status(404).json({ error: '提供商未找到' });
+    if (provider) {
+        modelsUrl = provider.modelsUrl;
+    } else {
+        // 自定义提供商：前端通过 query 传入 modelsUrl
+        modelsUrl = req.query.url as string || null;
+        if (!modelsUrl) {
+            return res.status(404).json({ error: '提供商未找到' });
+        }
+    }
     const userConfig = getUserConfig(req.userToken!);
     const keys = userConfig.providerKeys[id];
     if (!keys || keys.length === 0) return res.status(400).json({ error: '未配置密钥' });
     const index = userConfig.selectedKeyIndices[id] ?? 0;
     const apiKey = keys[index];
     try {
-        const response = await fetch(provider.modelsUrl, {
+        const response = await fetch(modelsUrl!, {
             headers: { 'Authorization': `Bearer ${apiKey}` }
         });
         if (!response.ok) throw new Error(await response.text());

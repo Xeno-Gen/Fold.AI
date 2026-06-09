@@ -221,5 +221,18 @@ window.__I18N_ZH__={
   "systemPrompt": "系统提示词",
   "general": "常规",
   "commandExecution": "命令执行",
-  "close": "关闭"
+  "close": "关闭",
+  "sandbox": "安全沙箱",
+  "cothink": "思维链注入",
+  "modelAsk": "模型提问",
+  "autoAskPopup": "自动弹出提问",
+  "streamOutput": "流式输出",
+  "agentMaxIter": "Agent最大迭代",
+  "addCustomProvider": "新增自定义提供商",
+  "noCustomProviders": "暂无自定义提供商",
+  "workdirPath": "工作目录路径",
+  "enabled": "开启",
+  "disabled": "关闭",
+  "pluginStatus": "当前插件状态",
+  "runtime": "运行时"
 };

@@ -145,6 +145,8 @@ var CustomProvider = (() => {
       const target = e.target;
       if (target.closest(".del-custom-provider")) {
         const btn = target.closest(".del-custom-provider");
+        e.stopPropagation();
+        e.preventDefault();
         deleteCustomProvider(btn.dataset.id || "");
       }
       if (target.id === "addCustomProviderBtn") {

@@ -155,6 +155,12 @@ window.showToast = function(msg) {
         try { var b = JSON.parse(localStorage.getItem('fold_chat_branches')); if (b) chatBranches = b; } catch (e) {}
     }
 
+    function savePinnedChats() {
+        try { localStorage.setItem('fold_pinned_chats', JSON.stringify(Array.from(pinnedChats))); } catch (e) {}
+    }
+    function loadPinnedChats() {
+        try { var p = JSON.parse(localStorage.getItem('fold_pinned_chats')); if (Array.isArray(p)) pinnedChats = new Set(p); } catch (e) {}
+    }
     var configPrompts = { think_modes: {} };
     function getReasonSteps() { return configPrompts.think_modes?.[currentThinkMode]?.steps || []; }
 
@@ -217,9 +223,9 @@ window.showToast = function(msg) {
     function renderWorkdirTab() {
     if (!settingsPanelContent) return;
     var curDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
-    var html = '<div class="settings-section"><div class="settings-section-title">工作目录</div>';
+    var html = '<div class="settings-section"><div class="settings-section-title">' + _('workDirectory') + '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
-    html += '<input type="text" id="wdTabPathInput" class="workdir-path-input" value="' + escapeHtml(curDir) + '" spellcheck="false" placeholder="工作目录路径">';
+    html += '<input type="text" id="wdTabPathInput" class="workdir-path-input" value="' + escapeHtml(curDir) + '" spellcheck="false" placeholder="' + _('workdirPath') + '">';
     html += '<button class="workdir-btn" id="wdTabBrowseBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg> 选择</button>';
     html += '<button class="workdir-btn" id="wdTabRefreshBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>';
     html += '<button class="workdir-btn" id="wdTabResetBtn">默认</button>';
@@ -302,7 +308,7 @@ function renderFileListForTab(data) {
     if (!fl) return;
     if (bc) {
         var parts = data.path.split('/').filter(Boolean);
-        var h = '<span data-path="/">工作目录</span>', acc = '';
+        var h = '<span data-path="/">' + _('workDirectory') + '</span>', acc = '';
         parts.forEach(function(p, i) {
             acc += '/' + p;
             h += '<span class="sep">/</span>';
@@ -442,7 +448,7 @@ async function openFileInBrowser(filePath) {
         { id: 'plugins', label: _('plugins'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
         { id: 'memories', label: _('memories'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>' },
         { id: 'usage', label: _('usage'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' },
-        { id: 'workdir', label: '工作目录', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>' },
+        { id: 'workdir', label: _('workDirectory'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>' },
         { id: 'identity', label: _('userIdentity'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg>' },
         { id: 'version', label: _('version'), icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' }
     ];
@@ -588,16 +594,16 @@ async function openFileInBrowser(filePath) {
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' + (_('thinkMode') || '思考模式') + '</span><span style="font-size:13px;color:#888;">' + (currentThinkMode === 'fast' ? (_('fast') || '快速') + ' — low' : currentThinkMode === 'think' ? (_('think') || '思考') + ' — medium' : currentThinkMode === 'deep' ? (_('deep') || '沉思') + ' — high' : (_('meditate') || '静思') + ' — max') + '</span></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + (_('model') || '模型') + '</span><span style="font-size:13px;color:#888;font-weight:500;">' + escapeHtml(currentModel || '—') + '</span></div></div>' +
             '<div class="settings-section"><div class="settings-section-title">' + (_('model') || '模型') + ' ' + (_('settings') || '设置') + '</div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' + '流式输出' + '</span><div class="think-mode-selector" id="settingsStreamToggle" style="display:inline-flex;">' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' + (_('streamOutput') || '流式输出') + '</span><div class="think-mode-selector" id="settingsStreamToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (streamEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
             '<button class="think-mode-option' + (!streamEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('includeReasoning') || '上下文并入深度思考') + '</span><div class="think-mode-selector" id="settingsIncludeReasoningToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (includeReasoning ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
             '<button class="think-mode-option' + (!includeReasoning ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + '模型提问' + '</span><div class="think-mode-selector" id="settingsAskToggle" style="display:inline-flex;">' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + (_('modelAsk') || '模型提问') + '</span><div class="think-mode-selector" id="settingsAskToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (askEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
             '<button class="think-mode-option' + (!askEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg>' + '自动弹出提问' + '</span><div class="think-mode-selector" id="settingsAskAutoToggle" style="display:inline-flex;">' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg>' + (_('autoAskPopup') || '自动弹出提问') + '</span><div class="think-mode-selector" id="settingsAskAutoToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (askAutoShow ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
             '<button class="think-mode-option' + (!askAutoShow ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
         settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(o) {
@@ -1212,10 +1218,25 @@ async function openFileInBrowser(filePath) {
         updateHistoryList();
     }
 
+    function mergeCustomProviders() {
+        try {
+            var customProvs = JSON.parse(localStorage.getItem('fold_custom_providers') || '[]');
+            // 先移除所有旧的 custom_ 提供商
+            providers = providers.filter(function(p) { return !p.id || !p.id.startsWith('custom_'); });
+            // 再重新添加
+            customProvs.forEach(function(cp) {
+                if (!providers.some(function(p) { return p.id === cp.id; })) {
+                    providers.push({ id: cp.id, name: cp.name, icon: cp.icon || '', url: cp.url, modelsUrl: cp.modelsUrl || '', chatFormat: cp.chatFormat || 'OpenAI' });
+                }
+            });
+        } catch (e) {}
+    }
+
     async function loadProviders() {
         try {
             var res = await fetch('/api/providers');
             providers = (await res.json()).providers || [];
+            mergeCustomProviders();
             if (providers.length && !currentProvider) currentProvider = providers[0].id;
             updateChatFormatFromProvider();
             if (currentProvider) await loadModels(currentProvider);
@@ -1236,7 +1257,16 @@ async function openFileInBrowser(filePath) {
 
     async function loadModels(providerId) {
         try {
-            var res = await fetch('/api/provider/' + providerId + '/models');
+            var modelsUrl = '/api/provider/' + providerId + '/models';
+            // 自定义提供商：传入 modelsUrl 参数供服务端代理请求
+            if (providerId && providerId.startsWith('custom_')) {
+                var cpList = JSON.parse(localStorage.getItem('fold_custom_providers') || '[]');
+                var cp = cpList.find(function(p) { return p.id === providerId; });
+                if (cp && cp.modelsUrl) {
+                    modelsUrl += '?url=' + encodeURIComponent(cp.modelsUrl);
+                }
+            }
+            var res = await fetch(modelsUrl);
             if (!res.ok) throw new Error(_('loadModelsFailed'));
             availableModels = (await res.json()).models || [];
             allModels = [].concat(availableModels);
@@ -1260,7 +1290,17 @@ async function openFileInBrowser(filePath) {
         try { var res = await fetch('/api/provider/' + providerId + '/keys/use', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: index }) }); return res.ok; } catch (e) { return false; }
     }
 
-    function openDrawer() { drawerOverlay.classList.add('active'); loadConfigFromBackend().then(function() { renderDrawer(); }); }
+    function openDrawer() {
+        drawerOverlay.classList.add('active');
+        mergeCustomProviders();
+        // 若当前选中的自定义提供商已被删除，重置为第一个可用提供商
+        if (currentProvider && currentProvider.startsWith('custom_') && !providers.some(function(p) { return p.id === currentProvider; })) {
+            currentProvider = providers.length > 0 ? providers[0].id : null;
+            saveConfigToBackend();
+        }
+        loadConfigFromBackend().then(function() { renderDrawer(); });
+    }
+    window.openDrawer = openDrawer;
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
     function toggleDrawer() { if (drawerOverlay.classList.contains('active')) closeDrawer(); else openDrawer(); }
     settingsBtn.onclick = toggleDrawer;
@@ -1274,7 +1314,10 @@ async function openFileInBrowser(filePath) {
         if (!drawerBody) return;
         var html = '<div class="section-title">' + _('modelProvider') + '</div><div class="provider-grid">';
         providers.forEach(function(p) {
-            html += '<div class="provider-card' + (currentProvider === p.id ? ' active' : '') + '" data-id="' + p.id + '"><div class="prov-icon">' + (p.icon ? '<img src="' + p.icon + '">' : p.name.charAt(0)) + '</div><div class="provider-name">' + p.name + '</div></div>';
+            var isCustom = p.id && p.id.startsWith('custom_');
+            html += '<div class="provider-card' + (currentProvider === p.id ? ' active' : '') + '" data-id="' + p.id + '">' +
+                (isCustom ? '<button class="del-custom-provider" data-id="' + p.id + '" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;line-height:1;padding:0;z-index:1;" title="删除">×</button>' : '') +
+                '<div class="prov-icon">' + (p.icon ? '<img src="' + p.icon + '">' : p.name.charAt(0)) + '</div><div class="provider-name">' + p.name + '</div></div>';
         });
         html += '</div>';
         var formats = getAvailableFormats();
@@ -1287,7 +1330,8 @@ async function openFileInBrowser(filePath) {
         } else {
             html += '<div style="margin:16px 0 20px;"><div class="section-title" style="margin-bottom:6px;">' + _('apiFormat') + '</div><div style="font-size:13px;color:#888;">' + formats[0] + '</div></div>';
         }
-        if (window.CustomProvider) html += CustomProvider.getCustomProviderSectionHtml();
+        // 已有自定义提供商合并到主提供商网格，此处仅保留新增按钮
+        html += '<div style="text-align:right;margin:4px 0 10px;"><button id="addCustomProviderBtn" style="border:none;background:transparent;color:#1a6bc0;cursor:pointer;font-size:12px;font-family:inherit;">+ ' + (_('addCustomProvider') || '新增自定义提供商') + '</button></div>';
         html += '<div class="section-title" style="margin-top:10px;">' + _('apiKey') + '</div>';
         html += '<div class="key-input-row"><input type="password" id="newKeyInput" placeholder="' + _('inputKey') + '"><button id="addKeyBtn">' + _('add') + '</button></div>';
         html += '<div class="key-list" id="keyListContainer"></div>';
@@ -1322,7 +1366,7 @@ async function openFileInBrowser(filePath) {
         html += '<div class="param-item"><label>' + _('seed') + '</label><input type="number" id="param-seed" placeholder="' + _('leaveEmpty') + '" value="' + (currentParams.seed != null ? currentParams.seed : '') + '"></div>';
         html += '<div class="param-item"><label>' + _('topK') + '</label><input type="number" id="param-topk" placeholder="' + _('leaveEmpty') + '" value="' + (currentParams.top_k != null ? currentParams.top_k : '') + '"></div>';
         html += '<div class="param-item"><label>' + _('customPort') + '</label><input type="number" id="customPortInput" value="' + customPort + '" min="1" max="65535"></div>';
-        html += '<div class="param-item"><label>Agent最大迭代</label><input type="number" id="agentMaxIterInput" value="' + agentMaxIterations + '" min="1" max="50"></div>';
+        html += '<div class="param-item"><label>' + (_('agentMaxIter') || 'Agent最大迭代') + '</label><input type="number" id="agentMaxIterInput" value="' + agentMaxIterations + '" min="1" max="50"></div>';
         html += '</div>';
         
         drawerBody.innerHTML = html;
@@ -1583,10 +1627,31 @@ async function openFileInBrowser(filePath) {
         } else {
             contentHtml = '<div class="markdown-body">' + renderMarkdown(content) + '</div>';
         }
-        bubble.innerHTML = (cotHtml || '') + reasoningHtml + contentHtml;
+        // 用户消息的文件卡片网格（持久化自 _files）
+        var filesHtml = '';
+        if (role === 'user' && msgRef && msgRef._files && msgRef._files.length > 0) {
+            filesHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:6px;">';
+            msgRef._files.forEach(function(f) {
+                var ext = f.fileName.split('.').pop().toLowerCase();
+                if (f.type === 'image' || ext.match(/^(png|jpg|jpeg|gif|webp|svg)$/)) {
+                    filesHtml += '<div style="position:relative;display:inline-block;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;cursor:pointer;flex-shrink:0;max-width:200px;" onclick="openFileViewer(\'' + escapeHtml(f.fileName) + '\',\'' + (f.content || '') + '\')">' +
+                        '<img src="' + (f.content || '') + '" alt="' + escapeHtml(f.fileName) + '" style="max-width:200px;max-height:150px;display:block;"></div>';
+                } else if (f.type === 'video' || ext.match(/^(mp4|mov|webm|avi|mkv|flv|wmv)$/)) {
+                    filesHtml += '<div style="border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;flex-shrink:0;max-width:280px;">' +
+                        '<video controls preload="metadata" style="width:100%;display:block;max-height:200px;background:#000;" src="' + (f.content || '') + '"></video></div>';
+                } else {
+                    filesHtml += '<div style="display:inline-flex;align-items:center;gap:12px;padding:14px 18px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;min-width:180px;cursor:pointer;flex-shrink:0;" onclick="openFileViewer(\'' + escapeHtml(f.fileName) + '\',\'' + escapeHtml(f.content || '') + '\')">' +
+                        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+                        '<span style="font-size:13px;color:#333;line-height:1.3;word-break:break-all;">' + escapeHtml(f.fileName) + '</span></div>';
+                }
+            });
+            filesHtml += '</div>';
+        }
+        bubble.innerHTML = (cotHtml || '') + reasoningHtml + filesHtml + contentHtml;
 
         var displayImages = (images && images.length) ? images : (msgRef && msgRef.images && msgRef.images.length ? msgRef.images : null);
-        if (displayImages) {
+        // _files 已包含图片卡片展示，避免重复显示
+        if (displayImages && !(role === 'user' && msgRef && msgRef._files && msgRef._files.length > 0)) {
             var ic = document.createElement('div');
             displayImages.forEach(function(src) {
                 var img = document.createElement('img');
@@ -2277,7 +2342,7 @@ async function openFileInBrowser(filePath) {
                 if (!isChatActive) activateChat(false);
                 switchChat(idx);
             };
-            li.querySelector('[title="' + _('pin') + '"]').onclick = function(e) { e.stopPropagation(); if (pinnedChats.has(idx)) pinnedChats.delete(idx); else pinnedChats.add(idx); updateHistoryList(); };
+            li.querySelector('[title="' + _('pin') + '"]').onclick = function(e) { e.stopPropagation(); if (pinnedChats.has(idx)) pinnedChats.delete(idx); else pinnedChats.add(idx); updateHistoryList(); savePinnedChats(); };
             li.querySelector('[title="' + _('rename') + '"]').onclick = function(e) {
                 e.stopPropagation();
                 var newTitle = prompt(_('renameTitle'), chatTitles[idx]);
@@ -2291,6 +2356,7 @@ async function openFileInBrowser(filePath) {
                 chatTitles.splice(idx, 1);
                 chatTokens.splice(idx, 1);
                 pinnedChats.delete(idx);
+                savePinnedChats();
                 if (currentChat >= chats.length) currentChat = chats.length - 1;
                 if (currentChat < 0) { currentChat = 0; chats = [[]]; chatTitles = [_('currentChatTitle')]; chatTokens = ['']; }
                 updateHistoryList();
@@ -2528,7 +2594,7 @@ async function openFileInBrowser(filePath) {
             var popup = document.createElement('div');
             popup.className = 'deep-think-popup';
             popup._triggerBtn = triggerBtn;
-            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>安全沙箱</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>思维链注入</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>模型提问</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
+            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>' + (_('sandbox') || '安全沙箱') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + (_('cothink') || '思维链注入') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>' + (_('modelAsk') || '模型提问') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
             document.body.appendChild(popup);
             var rect = triggerBtn.getBoundingClientRect();
             popup.style.left = (rect.left + rect.width / 2 - 10) + 'px';
@@ -2594,6 +2660,7 @@ async function openFileInBrowser(filePath) {
 
     loadSettings();
     loadBranches();
+    loadPinnedChats();
     var langText = document.getElementById('langSwitchText');
     if (langText) {
         langText.addEventListener('click', function() {

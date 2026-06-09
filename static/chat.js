@@ -287,6 +287,14 @@
         var requestId = Date.now().toString(36) + Math.random().toString(36).substring(2);
         currentRequestId = requestId;
         var payload = { messages: messages, provider: currentProvider, model: currentModel, chatFormat: currentChatFormat };
+        // 自定义提供商：传入 URL 供服务端代理请求
+        if (currentProvider && currentProvider.startsWith('custom_')) {
+            try {
+                var cpList = JSON.parse(localStorage.getItem('fold_custom_providers') || '[]');
+                var cp = cpList.find(function(p) { return p.id === currentProvider; });
+                if (cp && cp.url) payload.customProviderUrl = cp.url;
+            } catch (e) {}
+        }
         Object.keys(currentParams).forEach(function(k) { if (currentParams[k] != null) payload[k] = currentParams[k]; });
         payload.stream = streamEnabled;
         payload.requestId = requestId;
@@ -346,14 +354,25 @@
             } catch (e) {}
         }
         if (!isRegenerate) {
+            // 构建文件卡片数据，附加到 userMsg 用于持久化展示
+            var allFiles = textFiles.concat(imageFiles).concat(videoFiles);
             var userMsg = { role: 'user', content: userText || '', images: imgs };
+            if (allFiles.length > 0) {
+                userMsg._files = allFiles.map(function(f) { return { type: f.type, fileName: f.fileName, content: f.content }; });
+                // 将文本文件内容拼入 user 消息，替代独立的 tool 消息
+                var textContents = textFiles.map(function(f) { return _('filePrefix') + f.fileName + ']\n' + f.content; });
+                if (textContents.length > 0) {
+                    userMsg.content = (userText ? userText + '\n\n' : '') + textContents.join('\n\n');
+                }
+            }
             chats[currentChat].push(userMsg);
             saveChatToBackend();
 
             // 文件 & 图片卡片网格，显示在输出上方
-            var hasCards = textFiles.length > 0 || imageFiles.length > 0 || videoFiles.length > 0;
+            var hasCards = allFiles.length > 0;
+            var grid = null;
             if (hasCards) {
-                var grid = document.createElement('div');
+                grid = document.createElement('div');
                 grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:6px;';
                 textFiles.forEach(function(f) {
                     var card = document.createElement('div');
@@ -369,11 +388,6 @@
                         '<span style=\"font-size:13px;color:#333;line-height:1.3;word-break:break-all;\">' + escapeHtml(f.fileName) + '</span>';
                     grid.appendChild(card);
                 });
-            }
-            if (videoFiles.length > 0) {
-                videoFiles.forEach(function(f) {
-                    chats[currentChat].push({ role: 'tool', content: f.content, _fileCard: true, _fileName: f.fileName, _imageCard: false });
-                });
                 imageFiles.forEach(function(f) {
                     var thumb = document.createElement('div');
                     thumb.style.cssText = 'position:relative;display:inline-block;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;cursor:pointer;flex-shrink:0;max-width:200px;';
@@ -387,28 +401,15 @@
                     vwrap.innerHTML = '<video controls preload="metadata" style="width:100%;display:block;max-height:200px;background:#000;" src="' + f.content + '"></video>';
                     grid.appendChild(vwrap);
                 });
-                chatAreaInner.appendChild(grid);
             }
 
-            // 有文字才显示用户气泡，纯图片不显示
+            // 显示用户气泡（文字 / 图片 / 视频 / 文件的文件卡片通过 userMsg._files 渲染）
             if (userText) {
                 addMessage(userText, 'user', imgs, null, userMsg);
-            } else if (imgs.length > 0) {
-                // 纯图片上传：创建用户气泡并显示图片
+            } else if (imgs.length > 0 || allFiles.length > 0) {
                 addMessage('', 'user', imgs, null, userMsg);
             }
-            if (textFiles.length > 0) {
-                textFiles.forEach(function(f) {
-                    var msg = { role: 'tool', content: _('filePrefix') + f.fileName + ']\n' + f.content, _fileCard: true, _fileName: f.fileName };
-                    chats[currentChat].push(msg);
-                    // 同时显示文件卡片气泡
-                    addMessage(f.content, 'tool', [], null, msg);
-                });
-            }
-            // 纯视频/图片无文字时，显示 grid 中的卡片
-            if (!userText && (imageFiles.length > 0 || videoFiles.length > 0) && hasCards && grid) {
-                chatAreaInner.appendChild(grid);
-            }
+            // grid 已通过 userMsg._files 在 createMessageBubble 中渲染，无需重复追加
             ta.value = '';
             ta.style.height = 'auto';
             activeFiles[target] = [];
@@ -579,13 +580,13 @@
                 }
                 // 构建完整基础提示词（取代服务器端拼接）
                 var statusLines = [];
-                statusLines.push('- 命令执行: ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? '开启' : '关闭'));
-                statusLines.push('- 记忆: ' + (typeof memoryEnabled !== 'undefined' && memoryEnabled ? '开启' : '关闭'));
-                statusLines.push('- 安全沙箱: ' + (typeof sandboxEnabled !== 'undefined' && sandboxEnabled ? '开启' : '关闭'));
-                statusLines.push('- 模型提问: ' + (typeof askEnabled !== 'undefined' && askEnabled ? '开启' : '关闭'));
-                statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? '开启' : '关闭'));
-                statusLines.push('- 思维链注入: ' + (typeof cothinkEnabled !== 'undefined' && cothinkEnabled ? '开启' : '关闭'));
-                var statusText = '[当前插件状态]\n' + statusLines.join('\n');
+                statusLines.push('- ' + _('commandExec') + ': ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- ' + _('memory') + ': ' + (typeof memoryEnabled !== 'undefined' && memoryEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- ' + (_('sandbox') || 'Sandbox') + ': ' + (typeof sandboxEnabled !== 'undefined' && sandboxEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- ' + (_('modelAsk') || 'Model Ask') + ': ' + (typeof askEnabled !== 'undefined' && askEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- ' + (_('cothink') || 'Chain of Thought') + ': ' + (typeof cothinkEnabled !== 'undefined' && cothinkEnabled ? _('enabled') : _('disabled')));
+                var statusText = '[' + (_('pluginStatus') || '当前插件状态') + ']\n' + statusLines.join('\n');
                 var ctxStr = maxContextTokens >= 1000000 ? (maxContextTokens / 1000000).toFixed(0) + 'M' : (maxContextTokens / 1000).toFixed(0) + 'K';
                 if (!pureMode) {
                     var baseParts = [statusText];

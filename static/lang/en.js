@@ -221,5 +221,18 @@ window.__I18N_EN__={
   "systemPrompt": "System Prompt",
   "general": "General",
   "commandExecution": "Command Execution",
-  "close": "Close"
+  "close": "Close",
+  "sandbox": "Sandbox",
+  "cothink": "Chain of Thought",
+  "modelAsk": "Model Ask",
+  "autoAskPopup": "Auto-show Ask",
+  "streamOutput": "Stream Output",
+  "agentMaxIter": "Max Agent Iterations",
+  "addCustomProvider": "Add Custom Provider",
+  "noCustomProviders": "No custom providers yet",
+  "workdirPath": "Work Directory Path",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "pluginStatus": "Current Plugin Status",
+  "runtime": "Runtime"
 };
