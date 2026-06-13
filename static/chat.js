@@ -626,7 +626,7 @@
                         try {
                             var evt = JSON.parse(d2);
                             if (evt.type === 'content') {
-                                totalContent = evt.text;
+                                totalContent += evt.text;
                                 agentContentDiv.innerHTML = _renderAIContent(totalContent) || '...';
                                 updatePluginTimers(); restoreExpandedBlocks(); autoScroll();
                             } else if (evt.type === 'reasoning') {
