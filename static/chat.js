@@ -659,7 +659,7 @@
                 if (agentReasoningDiv._fullReasoning) {
                     agentReasoningDiv.innerHTML = createThinkBlock(agentReasoningDiv._fullReasoning, { isThinking: false });
                 }
-                var newBubble = createMessageBubble(fullContent, 'ai', [], null, agentAssistantMsg, '');
+                var newBubble = createMessageBubble(fullContent, 'ai', [], agentReasoningDiv._fullReasoning || null, agentAssistantMsg, '');
                 bubble.replaceWith(newBubble);
                 if (typeof showAskPopup === 'function' && _pendingAsk && typeof askAutoShow !== 'undefined' && askAutoShow) showAskPopup();
                 streaming = false; currentAbortController = null; updateSendBtn();
