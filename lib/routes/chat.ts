@@ -599,3 +599,172 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
         }
     }
 });
+
+// ===== Agent 循环（后端执行，持久化） =====
+const agentSessions = new Map<string, any>();
+
+function parseAgentCommands(text: string): { tag: string; cmd: string }[] {
+    const cmds: { tag: string; cmd: string }[] = [];
+    const patterns = [
+        { tag: 'shell', re: /<shell>\s*([\s\S]*?)\s*<\/shell>/gi },
+        { tag: 'powershell', re: /<powershell>\s*([\s\S]*?)\s*<\/powershell>/gi },
+        { tag: 'power', re: /<power>\s*([\s\S]*?)\s*<\/power>/gi },
+        { tag: 'cmd', re: /<cmd>\s*([\s\S]*?)\s*<\/cmd>/gi },
+        { tag: 'command', re: /<command>\s*([\s\S]*?)\s*<\/command>/gi },
+    ];
+    for (const p of patterns) {
+        let m;
+        while ((m = p.re.exec(text)) !== null) {
+            cmds.push({ tag: p.tag, cmd: m[1].trim() });
+        }
+    }
+    return cmds;
+}
+
+async function callLLM(messages: any[], provider: string, model: string, params: any, req: any): Promise<string> {
+    const userConfig = getUserConfig(req.userToken!);
+    const apiKey = getUserProviderKey(req.userToken!, provider);
+    const baseUrl = getUserProviderUrl(provider);
+
+    const openaiBody = {
+        model: model || userConfig.currentModel || 'deepseek-v4-flash',
+        messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+        temperature: params.temperature ?? 0.6,
+        top_p: params.top_p ?? 1.0,
+        max_tokens: params.max_tokens ?? 4096,
+        stream: false,
+    };
+
+    return new Promise((resolve, reject) => {
+        if (!baseUrl) { reject(new Error('API URL not configured')); return; }
+        const url = new URL(baseUrl);
+        const mod = url.protocol === 'https:' ? require('https') : require('http');
+        const options = {
+            hostname: url.hostname,
+            port: url.port || (url.protocol === 'https:' ? 443 : 80),
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+        };
+        const httpreq = mod.request(options, (resp: any) => {
+            let data = '';
+            resp.on('data', (chunk: any) => data += chunk);
+            resp.on('end', () => {
+                try {
+                    const json = JSON.parse(data);
+                    const content = json.choices?.[0]?.message?.content || '';
+                    resolve(content);
+                } catch (e) {
+                    reject(new Error('parse error: ' + data.substring(0, 200)));
+                }
+            });
+        });
+        httpreq.on('error', reject);
+        httpreq.write(JSON.stringify(openaiBody));
+        httpreq.end();
+    });
+}
+
+async function execCmdBackend(cmd: string, shell: string, workDir: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const port = process.env.PORT || '17923';
+    try {
+        const url = `http://localhost:${port}/api/plugin/CommandExecution/execute`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shell, command: cmd, timeout: 30000, workingDirectory: workDir, sandbox: true }),
+        });
+        if (res.ok) {
+            const d: any = await res.json();
+            return { stdout: d.stdout || '', stderr: d.stderr || '', exitCode: d.exitCode };
+        }
+        return { stdout: '', stderr: await res.text(), exitCode: -1 };
+    } catch (e: any) {
+        return { stdout: '', stderr: e.message, exitCode: -1 };
+    }
+}
+
+chatRouter.post('/chat/agent', async (req: Request, res: Response) => {
+    const {
+        messages, provider, model, temperature, top_p, max_tokens,
+        seed, frequency_penalty, presence_penalty, top_k,
+        requestId: reqId, maxIterations, workingDirectory
+    } = req.body;
+
+    const requestId = reqId || 'agent-' + Date.now().toString(36);
+    logger.info(`[agent] start: provider=${provider} model=${model} iter=${maxIterations || 10}`);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    let agentMessages = JSON.parse(JSON.stringify((messages || []).filter((m: any) => m.role)));
+    const maxIter = maxIterations || 10;
+    const params = { temperature, top_p, max_tokens, seed, frequency_penalty, presence_penalty, top_k };
+
+    const session = { messages: agentMessages, iteration: 0, active: true };
+    agentSessions.set(requestId, session);
+
+    try {
+        for (let iter = 0; iter < maxIter; iter++) {
+            session.iteration = iter;
+            res.write('data: ' + JSON.stringify({ type: 'iter_start', iteration: iter }) + '\n\n');
+
+            let content: string;
+            try {
+                content = await callLLM(agentMessages, provider, model, params, req);
+            } catch (e: any) {
+                res.write('data: ' + JSON.stringify({ type: 'error', message: e.message }) + '\n\n');
+                break;
+            }
+
+            agentMessages.push({ role: 'assistant', content });
+            res.write('data: ' + JSON.stringify({ type: 'content', text: content, iteration: iter }) + '\n\n');
+
+            const cmds = parseAgentCommands(content);
+            if (cmds.length === 0) {
+                res.write('data: ' + JSON.stringify({ type: 'iter_end', iteration: iter, commands: 0 }) + '\n\n');
+                break;
+            }
+
+            res.write('data: ' + JSON.stringify({ type: 'tool_calls', count: cmds.length, iteration: iter }) + '\n\n');
+
+            for (let ci = 0; ci < cmds.length; ci++) {
+                const c = cmds[ci];
+                const shellMap: Record<string, string> = { shell: 'shell', powershell: 'powershell', power: 'powershell', cmd: 'cmd', command: 'shell' };
+                const shell = shellMap[c.tag] || 'shell';
+
+                res.write('data: ' + JSON.stringify({ type: 'tool_start', idx: ci, cmd: c.cmd, shell }) + '\n\n');
+
+                const result = await execCmdBackend(c.cmd, shell, workingDirectory || '');
+                const resultStr = (result.stdout || '') + (result.stderr ? '\n' + result.stderr : '') + '\nexit code: ' + result.exitCode;
+                agentMessages.push({ role: 'tool', content: resultStr });
+
+                res.write('data: ' + JSON.stringify({
+                    type: 'tool_result', idx: ci, cmd: c.cmd,
+                    stdout: result.stdout || '', stderr: result.stderr || '', exitCode: result.exitCode,
+                }) + '\n\n');
+            }
+
+            res.write('data: ' + JSON.stringify({ type: 'iter_end', iteration: iter, commands: cmds.length }) + '\n\n');
+        }
+    } catch (e: any) {
+        logger.error('[agent] error: ' + e.message);
+        res.write('data: ' + JSON.stringify({ type: 'error', message: e.message }) + '\n\n');
+    } finally {
+        session.active = false;
+        res.write('data: ' + JSON.stringify({ type: 'done' }) + '\n\n');
+        if (!res.writableEnded) res.end();
+        setTimeout(() => agentSessions.delete(requestId), 60000);
+    }
+});
+
+chatRouter.get('/chat/agent/status/:requestId', (req: Request, res: Response) => {
+    const session = agentSessions.get(req.params.requestId);
+    if (!session) return res.json({ active: false });
+    res.json({ active: session.active, iteration: session.iteration, messageCount: session.messages.length });
+});

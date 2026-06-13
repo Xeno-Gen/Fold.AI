@@ -281,6 +281,34 @@
         return rest;
     }
 
+    async function callAgentAPI(messages) {
+        if (!currentModel) throw new Error(_('noModel'));
+        var requestId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+        currentRequestId = requestId;
+        var payload = {
+            messages: messages, provider: currentProvider, model: currentModel,
+            chatFormat: currentChatFormat, requestId: requestId,
+            maxIterations: agentMaxIterations || 10,
+            temperature: currentParams.temperature,
+            top_p: currentParams.top_p,
+            max_tokens: currentParams.max_tokens,
+            workingDirectory: (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '',
+        };
+        if (currentProvider && currentProvider.startsWith('custom_')) {
+            try { var cpl = JSON.parse(localStorage.getItem('fold_custom_providers') || '[]'); var cp = cpl.find(function(p) { return p.id === currentProvider; }); if (cp && cp.url) payload.customProviderUrl = cp.url; } catch (e) {}
+        }
+        currentAbortController = new AbortController();
+        var controller = currentAbortController;
+        var res = await fetch('/api/chat/agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+        if (!res.ok) { var err = await res.text(); throw new Error(err); }
+        return { body: res.body, apiRequest: payload, requestId: requestId };
+    }
+
     async function callAPI(messages) {
         if (!currentModel) throw new Error(_('noModel'));
         console.log('[API] 发起请求, 消息数:', messages.length, '模型:', currentModel, '提供商:', currentProvider);
@@ -506,6 +534,125 @@
             var maxAgentIter = agentEnabled ? agentMaxIterations : 1;
             var agentBubbles = [];
 
+            // 后端 Agent 模式（持久化、可刷新恢复）
+            if (agentEnabled && maxAgentIter > 1) {
+                var iterMsgs = reorderMessages(
+                    compressOldExecMessages(
+                        chats[currentChat].filter(function(m) { return m.role; }).map(function(m) {
+                            var msg = { role: m.role, content: m.content, images: m.images || [], _isExec: m._isExec };
+                            if (m.role === 'assistant' && typeof includeReasoning !== 'undefined' && includeReasoning && m.reasoning) {
+                                msg.reasoning = m.reasoning.length > 2000 ? m.reasoning.substring(0, 2000) + '...' : m.reasoning;
+                            }
+                            return msg;
+                        })
+                    )
+                );
+                var toolPromptText = buildToolPrompt();
+                if (toolPromptText) {
+                    var hasToolPrompt = false;
+                    for (var si = 0; si < iterMsgs.length; si++) {
+                        if (iterMsgs[si].role === 'system' && (iterMsgs[si].content.indexOf('[Agent能力]') !== -1 || iterMsgs[si].content.indexOf('[工具调用能力]') !== -1)) {
+                            hasToolPrompt = true; break;
+                        }
+                    }
+                    if (!hasToolPrompt) iterMsgs.unshift({ role: 'system', content: toolPromptText, images: [] });
+                }
+                // Think mode prompts
+                if (currentThinkMode === 'deep' || currentThinkMode === 'meditate') {
+                    try {
+                        var cfgFile2 = currentThinkMode === 'deep' ? 'DeepThink.md' : 'Medit.md';
+                        var cfgRes2 = await fetch('/api/config/' + cfgFile2);
+                        if (cfgRes2.ok) {
+                            var cfg2 = await cfgRes2.json();
+                            if (cfg2.think && cfg2.think.trim()) {
+                                var th3 = iterMsgs.find(function(m) { return m.role === 'system' && m.content.indexOf(cfg2.think.substring(0, 20)) !== -1; });
+                                if (!th3) iterMsgs.unshift({ role: 'system', content: cfg2.think, images: [] });
+                            }
+                        }
+                    } catch (e) {}
+                }
+                if (typeof cothinkEnabled !== 'undefined' && cothinkEnabled && pluginPrompts && pluginPrompts.cothink) {
+                    var cot2 = pluginPrompts.cothink;
+                    var cotExists2 = iterMsgs.some(function(m) { return m.role === 'system' && m.content.indexOf('[思维链') !== -1; });
+                    if (!cotExists2) iterMsgs.unshift({ role: 'system', content: cot2, images: [] });
+                }
+                // Memory
+                if (memoryEnabled && cachedMemories.length > 0) {
+                    var memContent2 = '[已有记忆]\n';
+                    cachedMemories.forEach(function(m, i) { memContent2 += '\n' + (i + 1) + '. ' + m.key + ': ' + (m.content || ''); });
+                    var sysCount2 = 0;
+                    while (sysCount2 < iterMsgs.length && iterMsgs[sysCount2].role === 'system') sysCount2++;
+                    iterMsgs.splice(sysCount2, 0, { role: 'system', content: memContent2.trim(), images: [] });
+                }
+                var statusLines = [];
+                statusLines.push('- ' + _('commandExec') + ': ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- ' + (_('sandbox') || 'Sandbox') + ': ' + (typeof sandboxEnabled !== 'undefined' && sandboxEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- ' + (_('modelAsk') || 'Model Ask') + ': ' + (typeof askEnabled !== 'undefined' && askEnabled ? _('enabled') : _('disabled')));
+                statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? _('enabled') : _('disabled')));
+                var statusText = '[' + (_('pluginStatus') || '当前插件状态') + ']\n' + statusLines.join('\n');
+                var ctxStr = maxContextTokens >= 1000000 ? (maxContextTokens / 1000000).toFixed(0) + 'M' : (maxContextTokens / 1000).toFixed(0) + 'K';
+                if (!pureMode) {
+                    var baseParts = [statusText];
+                    if (systemVersion) baseParts.push('[用户使用的系统版本: ' + systemVersion + ']');
+                    baseParts.push('目前最大上下文 ' + ctxStr + ' token');
+                    if (baseSystemPrompt) baseParts.push(baseSystemPrompt);
+                    if (currentParams.systemPrompt) baseParts.push(currentParams.systemPrompt);
+                    iterMsgs.unshift({ role: 'system', content: baseParts.join('\n\n'), images: [] });
+                } else if (currentParams.systemPrompt) {
+                    iterMsgs.unshift({ role: 'system', content: currentParams.systemPrompt, images: [] });
+                }
+                var agentCall = await callAgentAPI(iterMsgs);
+                bubble.innerHTML = '';
+                var agentContentDiv = document.createElement('div');
+                agentContentDiv.className = 'markdown-body';
+                bubble.appendChild(agentContentDiv);
+                var decoder = new TextDecoder();
+                var reader = agentCall.body.getReader();
+                var buf = '';
+                var totalContent = '';
+                while (true) {
+                    var r = await reader.read();
+                    if (r.done) break;
+                    buf += decoder.decode(r.value, { stream: true });
+                    var lines = buf.split('\n');
+                    buf = lines.pop() || '';
+                    for (var li2 = 0; li2 < lines.length; li2++) {
+                        var ln = lines[li2];
+                        if (!ln.startsWith('data: ')) continue;
+                        var d2 = ln.substring(6);
+                        try {
+                            var evt = JSON.parse(d2);
+                            if (evt.type === 'content') {
+                                totalContent = evt.text;
+                                agentContentDiv.innerHTML = _renderAIContent(totalContent) || '...';
+                                updatePluginTimers(); restoreExpandedBlocks(); autoScroll();
+                            } else if (evt.type === 'tool_start') {
+                                var tb = createCmdBlock(evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd, '执行中...');
+                                chatAreaInner.appendChild(tb);
+                                if (emptyHint) emptyHint.style.display = 'none';
+                                chatArea.scrollTop = chatArea.scrollHeight;
+                            } else if (evt.type === 'tool_result') {
+                                var rb = (evt.stdout || '') + (evt.stderr ? '\n' + evt.stderr : '') + '\n' + _('exitCode') + evt.exitCode;
+                                var lastBlock = chatAreaInner.querySelector('.plugin-block.cmd-block:last-child');
+                                if (lastBlock) updateCmdBlock(lastBlock, evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd, rb);
+                            } else if (evt.type === 'error') {
+                                console.error('[Agent] 后端错误:', evt.message);
+                            }
+                        } catch (e) {}
+                    }
+                    autoScroll();
+                }
+                fullContent = totalContent;
+                var agentAssistantMsg = { role: 'assistant', content: fullContent, reasoning: null };
+                chats[currentChat].push(agentAssistantMsg);
+                saveChatToBackend();
+                var newBubble = createMessageBubble(fullContent, 'ai', [], null, agentAssistantMsg, '');
+                bubble.replaceWith(newBubble);
+                if (typeof showAskPopup === 'function' && _pendingAsk && typeof askAutoShow !== 'undefined' && askAutoShow) showAskPopup();
+                streaming = false; currentAbortController = null; updateSendBtn();
+                updateHistoryTitle(); saveChatToBackend();
+                return;
+            }
             for (var agentIter = 0; agentIter < maxAgentIter; agentIter++) {
                 // Rebuild messages from current chat state (includes command results from previous iterations)
                 var iterMsgs = reorderMessages(
