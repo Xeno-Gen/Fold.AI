@@ -1755,6 +1755,9 @@ input:checked + .slider::before {
 .plugin-block.collapsed .plugin-block-body {
     display: none;
 }
+.plugin-block:not(.collapsed) .plugin-block-header .think-arrow {
+    transform: rotate(180deg);
+}
 .plugin-block.mem-block .plugin-block-header {
     background: linear-gradient(90deg,
         #b0aac4 0%, #b0aac4 35%,
@@ -2325,146 +2328,61 @@ input:checked + .slider::before {
 [data-theme="dark"] .cpf-confirm-btn { background: #e8e8e8; color: #0a0a0a; }
 [data-theme="dark"] .cpf-confirm-btn:hover { background: #fff; }
 
-/* ========== 终端（嵌入右侧边栏） ========== */
-.terminal-tabs {
-    display: flex;
-    gap: 2px;
+/* ========== 命令执行记录（嵌入右侧边栏） ========== */
+.cmdlog-container {
+    display: flex; flex-direction: column; height: 100%;
+    background: var(--bg, #fff); color: var(--text, #333);
+    font-size: 13px;
+}
+.cmdlog-list {
+    flex: 1; overflow-y: auto; padding: 4px 0;
+}
+.cmdlog-item {
+    display: flex; gap: 8px; padding: 8px 12px;
     border-bottom: 1px solid var(--border, #eee);
-    flex-shrink: 0;
+    align-items: flex-start; cursor: default;
 }
-.terminal-tab {
-    padding: 8px 14px;
-    cursor: pointer;
-    font-size: 12px;
-    color: var(--text2, #888);
-    border: none;
-    background: none;
-    font-family: inherit;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
-    white-space: nowrap;
+.cmdlog-item:hover { background: var(--hover-bg, #f8f8f8); }
+.cmdlog-item input[type="checkbox"] {
+    margin-top: 3px; flex-shrink: 0; cursor: pointer;
 }
-.terminal-tab:hover { color: var(--text, #333); }
-.terminal-tab.active { color: var(--text, #333); border-bottom-color: var(--text, #333); }
-.terminal-output {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 12px;
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    background: #0d0d0d;
-    color: #e8e8e8;
-    white-space: pre-wrap;
-    word-break: break-all;
-    min-height: 180px;
-    max-height: 300px;
+.cmdlog-item .cl-body { flex: 1; min-width: 0; }
+.cmdlog-item .cl-cmd {
+    font-family: 'SF Mono','Monaco','Consolas',monospace;
+    font-size: 12px; color: var(--text, #333); word-break: break-all;
+    margin-bottom: 3px;
 }
-.terminal-output .term-line { padding: 1px 0; }
-.terminal-output .term-line.term-stdout { color: #e8e8e8; }
-.terminal-output .term-line.term-stderr { color: #e74c3c; }
-.terminal-output .term-line.term-system { color: #888; font-style: italic; }
-.terminal-output .term-line.term-prompt { color: #4ade80; }
-.terminal-input-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    border-top: 1px solid var(--border, #eee);
-    flex-shrink: 0;
+.cmdlog-item .cl-cmd .cl-prompt { color: #4ade80; font-weight: 600; }
+.cmdlog-item .cl-result {
+    font-size: 11px; color: #888; white-space: pre-wrap; word-break: break-all;
+    max-height: 48px; overflow: hidden; padding: 3px 5px;
+    background: var(--code-bg, #f5f5f5); border-radius: 3px;
+    font-family: 'SF Mono','Monaco','Consolas',monospace; line-height: 1.3;
 }
-.terminal-prompt {
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    font-size: 13px;
-    color: #4ade80;
-    font-weight: 600;
+.cmdlog-item .cl-meta {
+    font-size: 10px; color: #aaa; margin-top: 2px;
 }
-.terminal-input {
-    flex: 1;
-    border: none;
-    outline: none;
-    font-size: 13px;
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    background: transparent;
-    color: var(--text, #333);
-    padding: 4px 0;
+.cmdlog-item .cl-exit { font-weight: 600; }
+.cmdlog-item .cl-exit.ok { color: #4ade80; }
+.cmdlog-item .cl-exit.fail { color: #e74c3c; }
+.cmdlog-empty {
+    text-align: center; color: #bbb; font-size: 13px; padding: 40px 0;
 }
-.terminal-input::placeholder { color: #aaa; }
-.terminal-send-btn {
-    padding: 5px 14px;
-    border: none;
-    border-radius: 6px;
-    background: #1a1a1a;
-    color: #fff;
-    font-size: 12px;
-    font-family: inherit;
-    cursor: pointer;
+.cmdlog-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-top: 1px solid var(--border, #eee);
+    flex-shrink: 0; background: var(--bg, #fff);
+}
+.cmdlog-bar .cl-count { font-size: 12px; color: #888; flex: 1; }
+.cmdlog-ask-btn {
+    padding: 6px 16px; border: none; border-radius: 6px;
+    background: #1a1a1a; color: #fff; font-size: 12px;
+    font-family: inherit; cursor: pointer; font-weight: 500;
     transition: background 0.2s;
-    white-space: nowrap;
 }
-.terminal-send-btn:hover { background: #333; }
-.terminal-send-btn:disabled { background: #ccc; cursor: not-allowed; }
-.terminal-history-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
-.terminal-history-empty {
-    text-align: center;
-    color: #bbb;
-    font-size: 13px;
-    padding: 30px 0;
-}
-.terminal-history-list {
-    flex: 1;
-    overflow-y: auto;
-}
-.terminal-history-item {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border, #f0f0f0);
-    cursor: pointer;
-    transition: background 0.15s;
-}
-.terminal-history-item:hover { background: var(--hover-bg, #f5f5f5); }
-.terminal-history-item .th-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-}
-.terminal-history-item .th-cmd {
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    font-size: 12px;
-    color: var(--text, #333);
-    word-break: break-all;
-    flex: 1;
-}
-.terminal-history-item .th-status {
-    font-size: 11px;
-    color: #4ade80;
-    flex-shrink: 0;
-}
-.terminal-history-item .th-status.error { color: #e74c3c; }
-.terminal-history-item .th-result {
-    font-size: 11px;
-    color: #888;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 60px;
-    overflow: hidden;
-    margin-top: 2px;
-    padding: 4px 6px;
-    background: var(--code-bg, #f5f5f5);
-    border-radius: 4px;
-    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-    line-height: 1.4;
-}
-.terminal-history-item .th-meta {
-    font-size: 10px;
-    color: #bbb;
-    margin-top: 4px;
-}
-[data-theme="dark"] .terminal-output { background: #000; }
-[data-theme="dark"] .terminal-input { color: var(--text); }
-[data-theme="dark"] .terminal-input-row { border-top-color: var(--border); }
-[data-theme="dark"] .terminal-history-item { border-bottom-color: var(--border); }
-[data-theme="dark"] .terminal-history-item:hover { background: var(--hover-bg); }
-[data-theme="dark"] .terminal-history-item .th-cmd { color: var(--text); }
-[data-theme="dark"] .terminal-history-item .th-result { background: var(--code-bg); }
+.cmdlog-ask-btn:hover { background: #333; }
+.cmdlog-ask-btn:disabled { background: #ccc; cursor: default; }
+[data-theme="dark"] .cmdlog-item { border-bottom-color: var(--border); }
+[data-theme="dark"] .cmdlog-item:hover { background: var(--hover-bg); }
+[data-theme="dark"] .cmdlog-bar { border-top-color: var(--border); }
+[data-theme="dark"] .cmdlog-item .cl-result { background: var(--code-bg); }

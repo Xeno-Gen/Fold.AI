@@ -907,6 +907,7 @@ async function openFileInBrowser(filePath) {
         chatAreaInner.addEventListener('click', function(e) {
             var header = e.target.closest('.plugin-block-header');
             if (!header) return;
+            if (e.target.closest('.cmd-block-edit')) return;
             var block = header.closest('.plugin-block');
             if (!block || block.closest('.ask-block') || block.closest('.mem-block')) return;
             e.stopPropagation();
@@ -1307,15 +1308,17 @@ async function openFileInBrowser(filePath) {
 
     if (window.CustomProvider) CustomProvider.initCustomProviders();
 
-    // ========== 终端（嵌入右侧边栏） ==========
-    var cmdHistory = []; // { cmd, shell, result, exitCode, time, fromModel }
-    var _drawerMode = 'settings'; // 'settings' | 'terminal'
+    // ========== 命令执行记录（嵌入右侧边栏） ==========
+    var _drawerMode = 'settings';
     var drawerTitle = $('drawerTitle');
 
     function openDrawer() {
         drawerOverlay.classList.add('active');
+        var dh = drawerOverlay.querySelector('.drawer-header');
         if (_drawerMode === 'settings') {
             drawerTitle.textContent = '设置';
+            drawerBody.style.padding = '';
+            if (dh) dh.style.display = '';
             mergeCustomProviders();
             if (currentProvider && currentProvider.startsWith('custom_') && !providers.some(function(p) { return p.id === currentProvider; })) {
                 currentProvider = providers.length > 0 ? providers[0].id : null;
@@ -1323,15 +1326,19 @@ async function openFileInBrowser(filePath) {
             }
             loadConfigFromBackend().then(function() { renderDrawer(); });
         } else {
-            drawerTitle.textContent = '终端';
-            renderTerminalDrawer();
+            drawerTitle.textContent = '';
+            drawerBody.style.padding = '0';
+            if (dh) dh.style.display = 'none';
+            renderCmdLog();
         }
     }
     window.openDrawer = openDrawer;
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
     function toggleDrawer(mode) {
-        if (mode) _drawerMode = mode;
-        if (drawerOverlay.classList.contains('active') && _drawerMode === (mode || 'settings')) {
+        if (mode && mode !== _drawerMode && drawerOverlay.classList.contains('active')) {
+            _drawerMode = mode;
+            openDrawer();
+        } else if (drawerOverlay.classList.contains('active')) {
             closeDrawer();
         } else {
             if (mode) _drawerMode = mode;
@@ -1344,171 +1351,108 @@ async function openFileInBrowser(filePath) {
         if (e.target.closest('.drawer-close-btn')) closeDrawer();
     });
 
-    var _terminalOutputRendered = false;
-
-    function renderTerminalDrawer() {
+    function renderCmdLog() {
         if (!drawerBody) return;
-        var html =
-            '<div class="terminal-tabs" id="terminalTabs">' +
-            '<button class="terminal-tab active" data-tab="exec">执行</button>' +
-            '<button class="terminal-tab" data-tab="history">历史命令</button>' +
-            '</div>' +
-            '<div class="terminal-output" id="terminalOutput">' +
-            '<div class="term-line term-system">Fold.AI 终端</div>' +
-            '<div class="term-line term-system">输入命令并按 Enter 执行</div>' +
-            '<div class="term-line term-system">---</div>' +
-            '</div>' +
-            '<div class="terminal-history-panel" id="terminalHistoryPanel" style="display:none;">' +
-            '<div class="terminal-history-empty" id="terminalHistoryEmpty">暂无历史命令</div>' +
-            '<div class="terminal-history-list" id="terminalHistoryList"></div>' +
-            '</div>' +
-            '<div class="terminal-input-row">' +
-            '<span class="terminal-prompt">$</span>' +
-            '<input type="text" class="terminal-input" id="terminalInput" placeholder="输入命令...">' +
-            '<button class="terminal-send-btn" id="terminalSendBtn">执行</button>' +
-            '</div>';
-        drawerBody.innerHTML = html;
-        _terminalOutputRendered = true;
-
-        // 绑定事件
-        var terminalInput = $('terminalInput');
-        var terminalSendBtn = $('terminalSendBtn');
-        if (terminalSendBtn) terminalSendBtn.onclick = function() { executeTerminalCommand(terminalInput.value); };
-        if (terminalInput) {
-            terminalInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') executeTerminalCommand(terminalInput.value);
-            });
-            setTimeout(function() { terminalInput.focus(); }, 100);
+        var msgs = chats[currentChat] || [];
+        var execMsgs = [];
+        for (var i = 0; i < msgs.length; i++) {
+            if (msgs[i] && msgs[i]._isExec) execMsgs.push(msgs[i]);
         }
-        // tab 切换
-        var tabsContainer = $('terminalTabs');
-        if (tabsContainer) {
-            tabsContainer.addEventListener('click', function(e) {
-                var tab = e.target.closest('.terminal-tab');
-                if (!tab) return;
-                var tabName = tab.dataset.tab;
-                tabsContainer.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
-                tab.classList.add('active');
-                var execOutput = $('terminalOutput');
-                var histPanel = $('terminalHistoryPanel');
-                if (tabName === 'exec') {
-                    execOutput.style.display = '';
-                    histPanel.style.display = 'none';
-                    setTimeout(function() { if (terminalInput) terminalInput.focus(); }, 100);
-                } else {
-                    execOutput.style.display = 'none';
-                    histPanel.style.display = '';
-                    renderTerminalHistory();
-                }
-            });
-        }
-    }
-
-    function termPrint(text, cls) {
-        var output = $('terminalOutput');
-        if (!output) return;
-        var line = document.createElement('div');
-        line.className = 'term-line ' + (cls || 'term-stdout');
-        line.textContent = text;
-        output.appendChild(line);
-        output.scrollTop = output.scrollHeight;
-    }
-
-    async function executeTerminalCommand(cmdText) {
-        if (!cmdText || !cmdText.trim()) return;
-        termPrint('$ ' + cmdText, 'term-prompt');
-        var terminalInput = $('terminalInput');
-        var terminalSendBtn = $('terminalSendBtn');
-        if (terminalInput) terminalInput.value = '';
-        if (terminalSendBtn) terminalSendBtn.disabled = true;
-        try {
-            var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
-            var res = await fetch('/api/plugin/CommandExecution/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ shell: 'shell', command: cmdText.trim(), timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true })
-            });
-            if (res.ok) {
-                var d = await res.json();
-                var out = (d.stdout || '').trim();
-                var err = (d.stderr || '').trim();
-                if (out) termPrint(out, 'term-stdout');
-                if (err) termPrint(err, 'term-stderr');
-                termPrint('exit code: ' + d.exitCode, 'term-system');
-            } else {
-                var errText = await res.text();
-                termPrint('Error: ' + errText, 'term-stderr');
-            }
-        } catch (e) {
-            termPrint('Error: ' + e.message, 'term-stderr');
-        } finally {
-            if (terminalSendBtn) terminalSendBtn.disabled = false;
-            var inp = $('terminalInput');
-            if (inp) inp.focus();
-        }
-    }
-
-    // 添加模型命令历史（由 chat.js 调用）
-    window.addCmdHistory = function(cmd, shell, result, exitCode) {
-        cmdHistory.push({ cmd: cmd, shell: shell, result: result || '', exitCode: exitCode, time: new Date(), fromModel: true });
-    };
-
-    function renderTerminalHistory() {
-        var list = $('terminalHistoryList');
-        var empty = $('terminalHistoryEmpty');
-        if (!list) return;
-        if (cmdHistory.length === 0) {
-            list.innerHTML = '';
-            if (empty) empty.style.display = 'block';
+        if (execMsgs.length === 0) {
+            drawerBody.innerHTML = '<div class="cmdlog-container"><div class="cmdlog-empty">暂无命令执行记录</div></div>';
             return;
         }
-        if (empty) empty.style.display = 'none';
-        var html = '';
-        for (var i = cmdHistory.length - 1; i >= 0; i--) {
-            var h = cmdHistory[i];
-            var label = h.fromModel ? '模型' : '用户';
-            var statusText = h.exitCode === 0 ? '✓ 成功' : '✗ 失败 (code: ' + h.exitCode + ')';
-            var statusCls = h.exitCode === 0 ? '' : ' error';
-            var resultPreview = h.result ? h.result.substring(0, 200) : '';
-            var timeStr = '';
-            if (h.time) {
-                var d = h.time;
-                timeStr = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0');
-            }
-            html += '<div class="terminal-history-item" data-cmd="' + escapeHtml(h.cmd) + '">' +
-                '<div class="th-header">' +
-                '<div class="th-cmd">$ ' + escapeHtml(h.cmd.length > 60 ? h.cmd.substring(0, 57) + '...' : h.cmd) + '</div>' +
-                '<div class="th-status' + statusCls + '">' + statusText + '</div>' +
-                '</div>';
-            if (resultPreview) {
-                html += '<div class="th-result">' + escapeHtml(resultPreview) + '</div>';
-            }
-            html += '<div class="th-meta"><span>' + label + '</span> · <span>' + timeStr + '</span></div>' +
-                '</div>';
-        }
-        list.innerHTML = html;
-        // 点击历史项填充到执行输入框并切回执行tab
-        list.querySelectorAll('.terminal-history-item').forEach(function(item) {
-            item.addEventListener('click', function() {
-                var cmd = item.dataset.cmd;
-                if (!cmd) return;
-                var tabs = $('terminalTabs');
-                if (tabs) {
-                    tabs.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
-                    var execTab = tabs.querySelector('.terminal-tab[data-tab="exec"]');
-                    if (execTab) execTab.classList.add('active');
+        var html = '<div class="cmdlog-container"><div class="cmdlog-list">';
+        for (var i = 0; i < execMsgs.length; i++) {
+            var m = execMsgs[i];
+            var cmd = m._execTitle || '';
+            var body = m.content || '';
+            var lines = body.split('\n');
+            var exitLine = '';
+            var resultText = body;
+            for (var j = lines.length - 1; j >= 0; j--) {
+                if (lines[j].indexOf('exit code:') !== -1 || lines[j].indexOf('退出码:') !== -1) {
+                    exitLine = lines[j];
+                    resultText = lines.slice(0, j).join('\n').trim();
+                    break;
                 }
-                var execOut = $('terminalOutput');
-                var histPanel = $('terminalHistoryPanel');
-                if (execOut) execOut.style.display = '';
-                if (histPanel) histPanel.style.display = 'none';
-                var inp = $('terminalInput');
-                if (inp) { inp.value = cmd; inp.focus(); }
+            }
+            var exitCodeMatch = exitLine.match(/(\d+)/);
+            var exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : -1;
+            var exitCls = exitCode === 0 ? 'ok' : 'fail';
+            var timeStr = '';
+            if (m._time) {
+                var d = new Date(m._time);
+                timeStr = d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')+':'+d.getSeconds().toString().padStart(2,'0');
+            }
+            var resultPreview = resultText ? resultText.substring(0, 150) : '';
+            html += '<div class="cmdlog-item">' +
+                '<input type="checkbox" class="cl-cb" data-idx="' + i + '">' +
+                '<div class="cl-body">' +
+                '<div class="cl-cmd"><span class="cl-prompt">$</span> ' + escapeHtml(cmd) + '</div>' +
+                (resultPreview ? '<div class="cl-result">' + escapeHtml(resultPreview) + '</div>' : '') +
+                '<div class="cl-meta"><span class="cl-exit ' + exitCls + '">' + (exitCode === 0 ? '✓ 成功' : '✗ code: ' + exitCode) + '</span>' + (timeStr ? ' · ' + timeStr : '') + '</div>' +
+                '</div></div>';
+        }
+        html += '</div>' +
+            '<div class="cmdlog-bar">' +
+            '<span class="cl-count" id="clCount">已选 0 条</span>' +
+            '<button class="cmdlog-ask-btn" id="cmdlogAskBtn" disabled>询问模型</button>' +
+            '</div></div>';
+        drawerBody.innerHTML = html;
+        var list = drawerBody.querySelector('.cmdlog-list');
+        if (list) {
+            list.addEventListener('change', function(e) {
+                if (e.target.classList.contains('cl-cb')) _updateCmdlogCount();
             });
-        });
+        }
+        var askBtn = $('cmdlogAskBtn');
+        if (askBtn) askBtn.onclick = _askModelAboutCmds;
     }
 
-    // 工具栏按钮
+    function _updateCmdlogCount() {
+        var cbs = drawerBody ? drawerBody.querySelectorAll('.cl-cb:checked') : [];
+        var count = $('clCount');
+        var btn = $('cmdlogAskBtn');
+        if (count) count.textContent = '已选 ' + cbs.length + ' 条';
+        if (btn) btn.disabled = cbs.length === 0;
+    }
+
+    function _askModelAboutCmds() {
+        if (!drawerBody) return;
+        var cbs = drawerBody.querySelectorAll('.cl-cb:checked');
+        if (cbs.length === 0) return;
+        var msgs = chats[currentChat] || [];
+        var execMsgs = [];
+        for (var i = 0; i < msgs.length; i++) {
+            if (msgs[i] && msgs[i]._isExec) execMsgs.push(msgs[i]);
+        }
+        var text = '以下是之前执行的命令及其结果，请基于这些信息：\n\n';
+        cbs.forEach(function(cb) {
+            var idx = parseInt(cb.dataset.idx);
+            var m = execMsgs[idx];
+            text += '---\n';
+            text += '命令: ' + (m._execTitle || '') + '\n';
+            text += '结果:\n' + (m.content || '') + '\n';
+        });
+        closeDrawer();
+        if (isChatActive && chatText) {
+            chatText.value = text;
+            chatText.style.height = 'auto';
+            chatText.style.height = chatText.scrollHeight + 'px';
+            updateSendBtn();
+            chatText.focus();
+        } else if (initText) {
+            initText.value = text;
+            initText.style.height = 'auto';
+            initText.style.height = initText.scrollHeight + 'px';
+            updateSendBtn();
+            initText.focus();
+        }
+    }
+
+    window.addCmdHistory = function(cmd, shell, result, exitCode) {};
+
     var initialTerminalBtn = document.getElementById('initialTerminalBtn');
     var chatTerminalBtn = document.getElementById('chatTerminalBtn');
     if (initialTerminalBtn) initialTerminalBtn.onclick = function() { toggleDrawer('terminal'); };
@@ -1782,9 +1726,11 @@ async function openFileInBrowser(filePath) {
             // 命令执行结果使用 plugin-block 折叠样式
             var execTitle = (msgRef._execTitle || (content || '').split('\n')[0] || '').replace(/^(命令结果|命令失败|命令异常):\s*/, '') || msgRef._execTitle || (content || '').split('\n')[0] || ' ';
             var body = msgRef._execBody || content || '';
-            contentHtml = '<div class="plugin-block cmd-block">' +
+            contentHtml = '<div class="plugin-block cmd-block collapsed">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">' + escapeHtml(execTitle) + '</span>' +
+                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;transition:transform .2s;">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(body || ' ') + '</div>' +
                 '</div>';
@@ -2070,9 +2016,7 @@ async function openFileInBrowser(filePath) {
             '<span class="plugin-block-title">' + escapeHtml(title) + '</span>' +
             '<button class="cmd-block-edit" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#999;display:flex;align-items:center;padding:2px 6px;border-radius:4px;font-size:12px;">编辑</button>' +
             '</div>' +
-            '<div class="plugin-block-body" style="white-space:pre-wrap;display:none;">' + escapeHtml(bodyText || ' ') + '</div>';
-        var header = block.querySelector('.plugin-block-header');
-        if (header) header.onclick = function(e) { if (!e.target.closest('.cmd-block-edit')) toggleCmdBlock(block); };
+            '<div class="plugin-block-body" style="white-space:pre-wrap;">' + escapeHtml(bodyText || ' ') + '</div>';
         var editBtn = block.querySelector('.cmd-block-edit');
         if (editBtn) {
             editBtn.onclick = function(e) {
@@ -2252,8 +2196,9 @@ async function openFileInBrowser(filePath) {
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
+                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
                 '</div>' +
-                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(cmd.trim()) + '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
         // Replace cmd/command blocks
@@ -2264,8 +2209,9 @@ async function openFileInBrowser(filePath) {
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
+                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
                 '</div>' +
-                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(cmd.trim()) + '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
         // Replace shell blocks
@@ -2276,8 +2222,9 @@ async function openFileInBrowser(filePath) {
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
+                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
                 '</div>' +
-                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(cmd.trim()) + '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
         // Replace mem:key blocks
@@ -2299,8 +2246,9 @@ async function openFileInBrowser(filePath) {
             return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">' + escapeHtml(contentShort) + '</span>' +
+                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
                 '</div>' +
-                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(content.trim()) + '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
                 '</div>');
         });
         // mem:key 未闭合

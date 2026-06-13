@@ -179,3 +179,29 @@ chatsRouter.get('/usage', (req: Request, res: Response) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+// 保存命令执行记录
+chatsRouter.post('/chat/:id/cmdlog', (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(404).json({ error: '聊天不存在' });
+    const cmdlog = req.body;
+    const filePath = getChatFilePath(req.userToken!, id).replace(/\.json$/, '_cmdlog.json');
+    const dir = getChatsDir(req.userToken!);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(cmdlog));
+    res.json({ success: true });
+});
+
+// 读取命令执行记录
+chatsRouter.get('/chat/:id/cmdlog', (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(404).json({ error: '聊天不存在' });
+    const filePath = getChatFilePath(req.userToken!, id).replace(/\.json$/, '_cmdlog.json');
+    if (!fs.existsSync(filePath)) return res.json([]);
+    try {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        res.json(data);
+    } catch (e) {
+        res.json([]);
+    }
+});

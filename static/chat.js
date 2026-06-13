@@ -101,14 +101,12 @@
                     var out = rawOut.trim();
                     resultBody = (rawOut ? (out || rawOut) : _('noOutput')) + '\n' + _('exitCode') + d.exitCode;
                     resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
-                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
-                    if (typeof window.addCmdHistory === 'function') window.addCmdHistory(cmd.command, cmd.shell, rawOut, d.exitCode);
+                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle, _time: new Date().toISOString() };
                 } else {
                     var errText = await res.text();
                     resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
                     resultBody = errText;
-                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
-                    if (typeof window.addCmdHistory === 'function') window.addCmdHistory(cmd.command, cmd.shell, errText, -1);
+                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle, _time: new Date().toISOString() };
                 }
                 var idx = chats[currentChat].indexOf(execMsg);
                 if (idx !== -1) chats[currentChat][idx] = sysMsg;
@@ -136,7 +134,6 @@
                     if (emptyHint) emptyHint.style.display = 'none';
                 }
                 chatArea.scrollTop = chatArea.scrollHeight;
-                if (typeof window.addCmdHistory === 'function') window.addCmdHistory(cmd.command, cmd.shell, e.message, -1);
             }
         }
         saveChatToBackend();
