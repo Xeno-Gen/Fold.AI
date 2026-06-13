@@ -625,7 +625,7 @@ async function callLLMStream(
     messages: any[], provider: string, model: string, params: any, req: any,
     onContent: (text: string) => void,
     onReasoning?: (text: string) => void
-): Promise<{ content: string; reasoning: string }> {
+): Promise<{ content: string; reasoning: string; usage: any }> {
     const userConfig = getUserConfig(req.userToken!);
     const apiKey = getUserProviderKey(req.userToken!, provider);
     const baseUrl = getUserProviderUrl(provider);
@@ -654,6 +654,7 @@ async function callLLMStream(
             let buffer = '';
             let fullContent = '';
             let fullReasoning = '';
+            let streamUsage: any = null;
             resp.on('data', (chunk: any) => {
                 buffer += chunk.toString();
                 const lines = buffer.split('\n');
@@ -664,6 +665,7 @@ async function callLLMStream(
                     if (d === '[DONE]') continue;
                     try {
                         const json = JSON.parse(d);
+                        if (json.usage) streamUsage = json.usage;
                         const delta = json.choices?.[0]?.delta;
                         if (delta) {
                             if (delta.reasoning_content) {
@@ -678,7 +680,7 @@ async function callLLMStream(
                     } catch (e) {}
                 }
             });
-            resp.on('end', () => resolve({ content: fullContent, reasoning: fullReasoning }));
+            resp.on('end', () => resolve({ content: fullContent, reasoning: fullReasoning, usage: streamUsage }));
             resp.on('error', reject);
         });
         httpreq.on('error', reject);
@@ -748,6 +750,9 @@ chatRouter.post('/chat/agent', async (req: Request, res: Response) => {
                 );
                 fullContent = result.content;
                 fullReasoning = result.reasoning;
+                if (result.usage) {
+                    res.write('data: ' + JSON.stringify({ type: 'usage', usage: result.usage, iteration: iter }) + '\n\n');
+                }
             } catch (e: any) {
                 res.write('data: ' + JSON.stringify({ type: 'error', message: e.message }) + '\n\n');
                 break;

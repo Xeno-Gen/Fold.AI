@@ -612,6 +612,7 @@
                 var reader = agentCall.body.getReader();
                 var buf = '';
                 var totalContent = '';
+                var agentUsage = null;
                 while (true) {
                     var r = await reader.read();
                     if (r.done) break;
@@ -633,6 +634,8 @@
                                 agentReasoningDiv._fullReasoning = rt;
                                 agentReasoningDiv.innerHTML = createThinkBlock(rt, { isThinking: true });
                                 autoScroll();
+                            } else if (evt.type === 'usage') {
+                                agentUsage = evt.usage;
                             } else if (evt.type === 'tool_start') {
                                 var tb = createCmdBlock(evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd, '执行中...');
                                 chatAreaInner.appendChild(tb);
@@ -650,9 +653,12 @@
                     autoScroll();
                 }
                 fullContent = totalContent;
-                var agentAssistantMsg = { role: 'assistant', content: fullContent, reasoning: null };
+                var agentAssistantMsg = { role: 'assistant', content: fullContent, reasoning: agentReasoningDiv._fullReasoning || null, apiRequest: agentCall.apiRequest || null, usage: agentUsage || null };
                 chats[currentChat].push(agentAssistantMsg);
                 saveChatToBackend();
+                if (agentReasoningDiv._fullReasoning) {
+                    agentReasoningDiv.innerHTML = createThinkBlock(agentReasoningDiv._fullReasoning, { isThinking: false });
+                }
                 var newBubble = createMessageBubble(fullContent, 'ai', [], null, agentAssistantMsg, '');
                 bubble.replaceWith(newBubble);
                 if (typeof showAskPopup === 'function' && _pendingAsk && typeof askAutoShow !== 'undefined' && askAutoShow) showAskPopup();
