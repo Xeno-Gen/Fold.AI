@@ -234,5 +234,6 @@ window.__I18N_ZH__={
   "enabled": "开启",
   "disabled": "关闭",
   "pluginStatus": "当前插件状态",
-  "runtime": "运行时"
+  "runtime": "运行时",
+  "drawerWidth": "侧边栏宽度"
 };

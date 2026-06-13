@@ -148,7 +148,7 @@ module.exports = function(context) {
 
         const execTimeout = timeout || 8000;
         let workDir = workingDirectory || process.cwd();
-        if (workDir === 'cwd') workDir = path.join(__dirname, '../../../cwd');
+        if (workDir === 'cwd') workDir = process.cwd();
         if (!path.isAbsolute(workDir)) workDir = path.resolve(workDir);
         if (!fs.existsSync(workDir)) {
             try { fs.mkdirSync(workDir, { recursive: true }); } catch (e) { workDir = process.cwd(); }

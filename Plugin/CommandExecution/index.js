@@ -15,7 +15,7 @@
             this.confirmBeforeExecution = true;
             this.allowedShells = ['powershell', 'cmd'];
             this.timeout = 30000;
-            this.workingDirectory = 'cwd';
+            this.workingDirectory = '';
             this.compressOldExecutions = true;
             this.executionHistory = [];
 
@@ -32,7 +32,7 @@
                     this.confirmBeforeExecution = settings.confirmBeforeExecution ?? true;
                     this.allowedShells = settings.allowedShells ?? ['powershell', 'cmd'];
                     this.timeout = settings.timeout ?? 30000;
-                    this.workingDirectory = settings.workingDirectory ?? 'cwd';
+                    this.workingDirectory = settings.workingDirectory ?? '';
                     this.compressOldExecutions = settings.compressOldExecutions ?? true;
                 }
             } catch (e) {

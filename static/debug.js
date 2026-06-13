@@ -17,7 +17,7 @@
         return String(t).replace(/[&<>"']/g, (c) => m[c]);
       }
       const plugin = window.CommandExecutionPlugin;
-      const workDir = plugin ? plugin.workingDirectory || "cwd" : "—";
+      const workDir = plugin ? plugin.workingDirectory || "" : "—";
       let html = '<div class="settings-section"><div class="settings-section-title">' + (_("version") || "版本信息") + '</div><div class="settings-item"><span class="settings-item-label">' + esc(versionText) + "</span></div></div>";
       html += '<div class="settings-section"><div class="settings-section-title">' + (_("plugins") || "功能开关") + '</div>';
       const sw = [

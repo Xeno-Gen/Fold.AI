@@ -12,9 +12,9 @@ export function setDefaultParams(params: any) {
     globalDefaultParams = { ...params };
 }
 
-// 默认工作目录：项目根目录下的 cwd 文件夹
+// 默认工作目录：使用 process.cwd()（用户实际的工作目录）
 export function getDefaultWorkDir(): string {
-    return path.join(__dirname, '../../../cwd');
+    return process.cwd();
 }
 
 // 粗略估算 token 数（中英文混合估算）

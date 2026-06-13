@@ -123,8 +123,34 @@ app.use('/plugins', express.static(path.join(__dirname, '../Plugin')));
 app.use('/com', express.static(path.join(__dirname, '../com')));
 // 公开 config 目录（用于 context.txt 等配置资源）
 app.use('/config', express.static(path.join(__dirname, '../config')));
-// 公开工作目录文件链接
-app.use('/cwd', express.static(path.join(__dirname, '../../cwd')));
+// 文件服务动态路由（支持 workingDirectory 参数）
+app.get('/File/:path(*)', (req, res) => {
+    if (ctrlState.disableWorkDir) return res.status(403).send('工作目录已被管理员禁用');
+    try {
+        const subPath = req.params.path || '';
+        const workDir = (req.query.workingDirectory as string) || getDefaultWorkDir();
+        const filePath = resolveWorkPath(subPath, workDir);
+        if (!fs.existsSync(filePath)) return res.status(404).send('文件不存在');
+        const stat = fs.statSync(filePath);
+        if (stat.isDirectory()) return res.status(400).send('不能读取目录');
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeMap: Record<string, string> = {
+            '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+            '.ico': 'image/x-icon', '.pdf': 'application/pdf',
+            '.js': 'application/javascript', '.css': 'text/css',
+            '.json': 'application/json', '.html': 'text/html',
+            '.txt': 'text/plain', '.md': 'text/markdown',
+        };
+        const mime = mimeMap[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'no-cache');
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(res);
+    } catch (e: any) {
+        res.status(500).send(e.message);
+    }
+});
 
 app.use('/api', chatRouter);
 app.use('/api', configRouter);
