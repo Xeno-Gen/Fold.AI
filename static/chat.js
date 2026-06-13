@@ -100,13 +100,15 @@
                     var rawOut = d.stdout || d.stderr || '';
                     var out = rawOut.trim();
                     resultBody = (rawOut ? (out || rawOut) : _('noOutput')) + '\n' + _('exitCode') + d.exitCode;
-                    resultTitle = '命令结果: ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
+                    resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
                     sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
+                    if (typeof window.addCmdHistory === 'function') window.addCmdHistory(cmd.command, cmd.shell, rawOut, d.exitCode);
                 } else {
                     var errText = await res.text();
-                    resultTitle = '命令失败: ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
+                    resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
                     resultBody = errText;
                     sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
+                    if (typeof window.addCmdHistory === 'function') window.addCmdHistory(cmd.command, cmd.shell, errText, -1);
                 }
                 var idx = chats[currentChat].indexOf(execMsg);
                 if (idx !== -1) chats[currentChat][idx] = sysMsg;
@@ -121,7 +123,7 @@
                 chatArea.scrollTop = chatArea.scrollHeight;
             } catch (e) {
                 var resultBody = e.message;
-                var resultTitle = '命令异常: ' + (cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command);
+                var resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
                 var sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
                 var idx = chats[currentChat].indexOf(execMsg);
                 if (idx !== -1) chats[currentChat][idx] = sysMsg;
@@ -134,6 +136,7 @@
                     if (emptyHint) emptyHint.style.display = 'none';
                 }
                 chatArea.scrollTop = chatArea.scrollHeight;
+                if (typeof window.addCmdHistory === 'function') window.addCmdHistory(cmd.command, cmd.shell, e.message, -1);
             }
         }
         saveChatToBackend();
@@ -231,7 +234,7 @@
             parts.push(pluginPrompts.Ask);
         }
         if (commandExecEnabled) {
-            var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
+            var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
             parts.push('默认工作目录为 ' + wd + '，所有命令默认在此目录执行，记住在查看文件时不能虚构文件夹，最佳做法是使用查阅目录的命令');
         }
         return parts.join('\n').trim();

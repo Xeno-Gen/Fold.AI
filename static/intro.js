@@ -222,7 +222,7 @@ window.showToast = function(msg) {
     }
     function renderWorkdirTab() {
     if (!settingsPanelContent) return;
-    var curDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
+    var curDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
     var html = '<div class="settings-section"><div class="settings-section-title">' + _('workDirectory') + '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
     html += '<input type="text" id="wdTabPathInput" class="workdir-path-input" value="' + escapeHtml(curDir) + '" spellcheck="false" placeholder="' + _('workdirPath') + '">';
@@ -246,7 +246,7 @@ window.showToast = function(msg) {
     document.getElementById('wdTabBrowseBtn').onclick = handleFolderPickTab;
     document.getElementById('wdTabRefreshBtn').onclick = function() { loadDirectoryForTab(filesCurrentDir); };
     document.getElementById('wdTabResetBtn').onclick = function() {
-        var def = defaultWorkDir || 'cwd';
+        var def = defaultWorkDir || '';
         if (inp) inp.value = def;
         if (window.CommandExecutionPlugin) { window.CommandExecutionPlugin.workingDirectory = def; window.CommandExecutionPlugin.saveSettings(); }
         loadDirectoryForTab(filesCurrentDir);
@@ -297,7 +297,7 @@ function loadDirectoryForTab(dir) {
     var fl = document.getElementById('wdFileList'), bc = document.getElementById('wdBreadcrumb');
     if (!fl) return;
     fl.innerHTML = '<div style="text-align:center;color:#bbb;font-size:13px;padding:24px 0;">加载中...</div>';
-    var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || 'cwd';
+    var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
     fetch('/api/files/browse?dir=' + encodeURIComponent(dir) + '&workingDirectory=' + encodeURIComponent(wd))
         .then(function(r) { return r.json(); })
         .then(function(data) { renderFileListForTab(data); })
@@ -305,6 +305,7 @@ function loadDirectoryForTab(dir) {
 }
 function renderFileListForTab(data) {
     var fl = document.getElementById('wdFileList'), bc = document.getElementById('wdBreadcrumb');
+    var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
     if (!fl) return;
     if (bc) {
         var parts = data.path.split('/').filter(Boolean);
@@ -328,7 +329,7 @@ function renderFileListForTab(data) {
         if (isDir) {
             thumb = '<svg class="file-icon folder" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2l-2-3H5a2 2 0 0 0-2 2z"/></svg>';
         } else if (isImg) {
-            thumb = '<img src="/cwd' + fp + '" style="width:56px;height:56px;border-radius:6px;object-fit:cover;" loading="lazy" onerror="this.style.display=\'none\'">';
+            thumb = '<img src="/File' + fp + '?workingDirectory=' + encodeURIComponent(wd) + '" style="width:56px;height:56px;border-radius:6px;object-fit:cover;" loading="lazy" onerror="this.style.display=\'none\'">';
         } else {
             thumb = '<svg class="file-icon file" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
         }
@@ -376,6 +377,7 @@ function showFileCtxMenu(e, path, isDir) {
     closeCtxMenu();
     var m = document.getElementById('wdCtxMenu');
     if (!m) return;
+    var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
     document.querySelectorAll('.workdir-file-list .file-list-item').forEach(function(el) { el.classList.remove('selected'); });
     var q = '.workdir-file-list .file-list-item[data-path="' + path.replace(/"/g, '&quot;') + '"]';
     var items = document.querySelectorAll(q);
@@ -394,7 +396,7 @@ function showFileCtxMenu(e, path, isDir) {
             closeCtxMenu();
             var action = this.dataset.action;
             if (action === 'view') { if (isDir) loadDirectoryForTab(path); else openFileInBrowser(path); }
-            else if (action === 'viewFile') { window.open('/cwd' + path, '_blank'); }
+            else if (action === 'viewFile') { window.open('/File' + path + '?workingDirectory=' + encodeURIComponent(wd), '_blank'); }
             else if (action === 'rename') {
                 var name = path.split('/').filter(Boolean).pop() || '';
                 var newName = prompt('重命名:', name);
@@ -419,12 +421,13 @@ function showFileCtxMenu(e, path, isDir) {
 
 async function openFileInBrowser(filePath) {
         try {
-            var res = await fetch('/api/files/read?file=' + encodeURIComponent(filePath));
+            var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
+            var res = await fetch('/api/files/read?file=' + encodeURIComponent(filePath) + '&workingDirectory=' + encodeURIComponent(wd));
             if (!res.ok) { showToast('无法读取文件'); return; }
             var data = await res.json();
             if (!data.text) {
                 // 非文本文件，直接打开原始链接
-                window.open('/cwd' + filePath, '_blank');
+                window.open('/File' + filePath + '?workingDirectory=' + encodeURIComponent(wd), '_blank');
                 return;
             }
             // 文本文件在查看器中显示
@@ -505,7 +508,7 @@ async function openFileInBrowser(filePath) {
             '<button class="think-mode-option' + (currentTheme === 'light' ? ' active' : '') + '" data-theme="light"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('light') + '</span></button>' +
             '<button class="think-mode-option' + (currentTheme === 'dark' ? ' active' : '') + '" data-theme="dark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('dark') + '</span></button>' +
             '<button class="think-mode-option' + (currentTheme === 'system' ? ' active' : '') + '" data-theme="system"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>' + _('system') + '</span></button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' + _('chatFont') + '</span><select id="settingsFontSelect" class="settings-font-select"><option value="">' + _('defaultFont') + '</option><option value="PingFang SC, Microsoft YaHei, sans-serif">PingFang</option><option value="Noto Serif SC, serif">Noto Serif</option><option value="Songti SC, serif">宋体</option><option value="Inter, sans-serif">Inter</option><option value="quote-cjk-patch, PingFang SC, Microsoft YaHei, sans-serif">quote-cjk-patch</option><option value="Cascadia Code, JetBrains Mono, Fira Code, SF Mono, Monaco, Consolas, monospace">Monospace</option></select></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' + _('chatFont') + '</span><select id="settingsFontSelect" class="settings-font-select"><option value="">' + _('system') + '</option><option value="Fira Code, monospace">Fira Code</option><option value="PingFang SC, Microsoft YaHei, sans-serif">PingFang</option><option value="Noto Serif SC, serif">Noto Serif</option><option value="Songti SC, serif">宋体</option><option value="Inter, sans-serif">Inter</option><option value="quote-cjk-patch, PingFang SC, Microsoft YaHei, sans-serif">quote-cjk-patch</option><option value="Cascadia Code, JetBrains Mono, Fira Code, SF Mono, Monaco, Consolas, monospace">Monospace</option></select></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5h16v2M4 11h16M4 15h16M4 19h16"/></svg>' + (_('fontSize') || '字号') + '</span><div class="think-mode-selector" id="settingsFontSizeSelector" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (chatFontSize === 13 ? ' active' : '') + '" data-size="13">13</button>' +
             '<button class="think-mode-option' + (!chatFontSize || chatFontSize === 15 ? ' active' : '') + '" data-size="15">15</button>' +
@@ -899,6 +902,18 @@ async function openFileInBrowser(filePath) {
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (currentTheme === 'system') applyTheme('system'); });
 
+    // 点击 plugin-block header 折叠/展开（事件代理）
+    if (chatAreaInner) {
+        chatAreaInner.addEventListener('click', function(e) {
+            var header = e.target.closest('.plugin-block-header');
+            if (!header) return;
+            var block = header.closest('.plugin-block');
+            if (!block || block.closest('.ask-block') || block.closest('.mem-block')) return;
+            e.stopPropagation();
+            toggleCmdBlock(block);
+        });
+    }
+
     var themeToggleBtn = document.getElementById('themeToggleBtn');
     if (themeToggleBtn) {
         themeToggleBtn.onclick = function() {
@@ -1160,7 +1175,7 @@ async function openFileInBrowser(filePath) {
             }
             if (data.workDir) {
                 defaultWorkDir = data.workDir;
-                if (window.CommandExecutionPlugin && (!window.CommandExecutionPlugin.workingDirectory || window.CommandExecutionPlugin.workingDirectory === 'cwd')) {
+                if (window.CommandExecutionPlugin && (!window.CommandExecutionPlugin.workingDirectory || window.CommandExecutionPlugin.workingDirectory === 'cwd' || window.CommandExecutionPlugin.workingDirectory === '')) {
                     window.CommandExecutionPlugin.workingDirectory = data.workDir;
                     window.CommandExecutionPlugin.saveSettings();
                 }
@@ -1310,6 +1325,166 @@ async function openFileInBrowser(filePath) {
     });
     if (window.CustomProvider) CustomProvider.initCustomProviders();
 
+    // ========== 终端 ==========
+    var terminalOverlay = $('terminalOverlay');
+    var terminalPanel = $('terminalPanel');
+    var terminalOutput = $('terminalOutput');
+    var terminalInput = $('terminalInput');
+    var terminalSendBtn = $('terminalSendBtn');
+    var terminalCloseBtn = $('terminalCloseBtn');
+    var terminalHistoryList = $('terminalHistoryList');
+    var terminalHistoryEmpty = $('terminalHistoryEmpty');
+    var cmdHistory = []; // { cmd, shell, result, exitCode, time, fromModel }
+    var terminalExecHistory = []; // for up-arrow recall within session
+
+    function openTerminal() {
+        terminalOverlay.classList.add('active');
+        if (terminalOutput && terminalOutput.children.length === 0) {
+            termPrint('Fold.AI 终端', 'term-system');
+            termPrint('输入命令并按 Enter 执行', 'term-system');
+            termPrint('---', 'term-system');
+        }
+        terminalInput.focus();
+    }
+    function closeTerminal() { terminalOverlay.classList.remove('active'); }
+    function toggleTerminal() {
+        if (terminalOverlay.classList.contains('active')) closeTerminal();
+        else openTerminal();
+    }
+
+    // 终端 tab 切换
+    document.addEventListener('click', function(e) {
+        var tab = e.target.closest('.terminal-tab');
+        if (!tab) return;
+        var tabName = tab.dataset.tab;
+        document.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        var execPanel = document.getElementById('terminalExecPanel');
+        var histPanel = document.getElementById('terminalHistoryPanel');
+        if (tabName === 'exec') {
+            execPanel.style.display = 'flex';
+            histPanel.style.display = 'none';
+            setTimeout(function() { terminalInput.focus(); }, 100);
+        } else {
+            execPanel.style.display = 'none';
+            histPanel.style.display = 'flex';
+            renderTerminalHistory();
+        }
+    });
+
+    function termPrint(text, cls) {
+        if (!terminalOutput) return;
+        var line = document.createElement('div');
+        line.className = 'term-line ' + (cls || 'term-stdout');
+        line.textContent = text;
+        terminalOutput.appendChild(line);
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    }
+
+    async function executeTerminalCommand(cmdText) {
+        if (!cmdText || !cmdText.trim()) return;
+        termPrint('$ ' + cmdText, 'term-prompt');
+        terminalInput.value = '';
+        terminalSendBtn.disabled = true;
+        terminalExecHistory.push(cmdText.trim());
+        try {
+            var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
+            var res = await fetch('/api/plugin/CommandExecution/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shell: 'shell', command: cmdText.trim(), timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true })
+            });
+            if (res.ok) {
+                var d = await res.json();
+                var out = (d.stdout || '').trim();
+                var err = (d.stderr || '').trim();
+                if (out) termPrint(out, 'term-stdout');
+                if (err) termPrint(err, 'term-stderr');
+                termPrint('exit code: ' + d.exitCode, 'term-system');
+            } else {
+                var errText = await res.text();
+                termPrint('Error: ' + errText, 'term-stderr');
+            }
+        } catch (e) {
+            termPrint('Error: ' + e.message, 'term-stderr');
+        } finally {
+            terminalSendBtn.disabled = false;
+            terminalInput.focus();
+        }
+    }
+
+    // 添加模型命令历史（由 chat.js 调用）
+    window.addCmdHistory = function(cmd, shell, result, exitCode) {
+        cmdHistory.push({ cmd: cmd, shell: shell, result: result, exitCode: exitCode, time: new Date(), fromModel: true });
+    };
+
+    function renderTerminalHistory() {
+        if (!terminalHistoryList) return;
+        if (cmdHistory.length === 0) {
+            terminalHistoryList.innerHTML = '';
+            if (terminalHistoryEmpty) terminalHistoryEmpty.style.display = 'block';
+            return;
+        }
+        if (terminalHistoryEmpty) terminalHistoryEmpty.style.display = 'none';
+        var html = '';
+        // 从后往前显示（最新的在前面）
+        for (var i = cmdHistory.length - 1; i >= 0; i--) {
+            var h = cmdHistory[i];
+            var label = h.fromModel ? '模型' : '用户';
+            var status = h.exitCode === 0 ? '✓' : '✗';
+            var statusCls = h.exitCode === 0 ? '' : ' error';
+            var timeStr = '';
+            if (h.time) {
+                var d = h.time;
+                timeStr = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0');
+            }
+            html += '<div class="terminal-history-item" data-cmd="' + escapeHtml(h.cmd) + '" data-shell="' + escapeHtml(h.shell || '') + '">' +
+                '<div class="th-cmd">' + escapeHtml(h.cmd.length > 80 ? h.cmd.substring(0, 77) + '...' : h.cmd) + '</div>' +
+                '<div class="th-meta"><span>' + label + '</span><span class="th-status' + statusCls + '">' + status + '</span><span>' + timeStr + '</span></div>' +
+                '</div>';
+        }
+        terminalHistoryList.innerHTML = html;
+        // 点击历史项填充到执行输入框
+        terminalHistoryList.querySelectorAll('.terminal-history-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                var cmd = item.dataset.cmd;
+                if (cmd) {
+                    // 切换到执行 tab
+                    document.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
+                    document.querySelector('.terminal-tab[data-tab="exec"]').classList.add('active');
+                    document.getElementById('terminalExecPanel').style.display = 'flex';
+                    document.getElementById('terminalHistoryPanel').style.display = 'none';
+                    terminalInput.value = cmd;
+                    terminalInput.focus();
+                }
+            });
+        });
+    }
+
+    // 终端按钮事件
+    if (terminalSendBtn) {
+        terminalSendBtn.onclick = function() { executeTerminalCommand(terminalInput.value); };
+    }
+    if (terminalInput) {
+        terminalInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') executeTerminalCommand(terminalInput.value);
+        });
+    }
+    if (terminalCloseBtn) {
+        terminalCloseBtn.onclick = closeTerminal;
+    }
+    // 点击遮罩关闭
+    if (terminalOverlay) {
+        terminalOverlay.addEventListener('click', function(e) {
+            if (e.target === terminalOverlay) closeTerminal();
+        });
+    }
+    // 工具栏按钮
+    var initialTerminalBtn = document.getElementById('initialTerminalBtn');
+    var chatTerminalBtn = document.getElementById('chatTerminalBtn');
+    if (initialTerminalBtn) initialTerminalBtn.onclick = toggleTerminal;
+    if (chatTerminalBtn) chatTerminalBtn.onclick = toggleTerminal;
+
     async function renderDrawer() {
         if (!drawerBody) return;
         var html = '<div class="section-title">' + _('modelProvider') + '</div><div class="provider-grid">';
@@ -1372,7 +1547,8 @@ async function openFileInBrowser(filePath) {
         drawerBody.innerHTML = html;
 
         drawerBody.querySelectorAll('.provider-card').forEach(function(card) {
-            card.onclick = async function() {
+            card.onclick = async function(e) {
+                if (e.target.closest('.del-custom-provider')) return;
                 drawerBody.querySelectorAll('.provider-card').forEach(function(c) { c.classList.remove('active'); });
                 card.classList.add('active');
                 currentProvider = card.dataset.id;
@@ -1540,30 +1716,26 @@ async function openFileInBrowser(filePath) {
         } else if (duringMode === 'on') {
             collapsedClass = ' collapsed';
         }
-        return '<div class="think-block' + collapsedClass + '" style="margin-left:-12px;"><div class="think-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><div class="think-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg></div><span>' + titleText + '</span>' + (tokenStr ? '<span class="pb-tokens">' + tokenStr + '</span>' : '') + '<div class="think-arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg></div></div><div class="think-body-wrapper"><div class="think-line"></div><div class="think-content' + contentSuffix + '">' + escapeHtml(displayReasoning).replace(/\n/g, '<br>') + '</div></div></div>';
+        return '<div class="think-block' + collapsedClass + '" style="margin-left:-12px;"><div class="think-header" onclick="toggleThinkBlock(this)"><div class="think-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg></div><span>' + titleText + '</span>' + (tokenStr ? '<span class="pb-tokens">' + tokenStr + '</span>' : '') + '<div class="think-arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg></div></div><div class="think-body-wrapper"><div class="think-line"></div><div class="think-content' + contentSuffix + '">' + escapeHtml(displayReasoning).replace(/\n/g, '<br>') + '</div></div></div>';
     }
 
     window.toggleThinkBlock = function(header) {
         var block = header.parentElement;
         var wrapper = block.querySelector('.think-body-wrapper');
         if (!wrapper) return;
-        wrapper.style.transition = 'max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease';
         if (block.classList.contains('collapsed')) {
-            var h = wrapper.scrollHeight + 10;
-            wrapper.style.maxHeight = '0px';
             block.classList.remove('collapsed');
+            wrapper.style.maxHeight = '';
+            var h = wrapper.scrollHeight + 3;
+            wrapper.style.maxHeight = '0px';
             void wrapper.offsetHeight;
             wrapper.style.maxHeight = h + 'px';
-            wrapper.style.opacity = '1';
-            setTimeout(function() { wrapper.style.maxHeight = ''; wrapper.style.transition = ''; }, 400);
         } else {
+            // 折叠：锁定当前高度，再让 CSS !important 接管
             var h = wrapper.scrollHeight;
             wrapper.style.maxHeight = h + 'px';
             void wrapper.offsetHeight;
             block.classList.add('collapsed');
-            wrapper.style.maxHeight = '0';
-            wrapper.style.opacity = '0';
-            setTimeout(function() { wrapper.style.transition = ''; }, 400);
         }
     };
 
@@ -1577,26 +1749,18 @@ async function openFileInBrowser(filePath) {
         if (role === 'ai') {
             var rendered = _renderAIContent(content);
             contentHtml = '<div class="markdown-body">' + rendered + '</div>';
-        } else if ((role === 'system' || role === 'tool') && msgRef && msgRef._isExec) {
+        } else if (msgRef && msgRef._isExec) {
             // 命令执行结果使用 plugin-block 折叠样式
-            var execTitle = msgRef._execTitle || '';
-            if (!execTitle) {
-                var firstLine = (content || '').split('\n')[0] || '命令结果';
-                var bodyFromContent = (content || '').substring(firstLine.length).replace(/^\n+/, '');
-                if (!bodyFromContent) { execTitle = '命令结果'; } else { execTitle = firstLine; }
-            }
+            var execTitle = (msgRef._execTitle || (content || '').split('\n')[0] || '').replace(/^(命令结果|命令失败|命令异常):\s*/, '') || msgRef._execTitle || (content || '').split('\n')[0] || ' ';
             var body = msgRef._execBody || content || '';
-            var execTokens = estimateTokens(body);
-            contentHtml = '<div class="plugin-block cmd-block collapsed">' +
+            contentHtml = '<div class="plugin-block cmd-block">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">' + escapeHtml(execTitle) + '</span>' +
-                '<span class="pb-tokens">( ' + formatTokens(execTokens) + 'Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(body || ' ') + '</div>' +
                 '</div>';
-        } else if (role === 'system') {
-            contentHtml = '<div class="markdown-body system-message">' + renderMarkdown(content) + '</div>';
         } else if (msgRef && (msgRef._fileCard || msgRef._fileName)) {
+            // 文件卡片（图片/视频/文件）优先于 system 渲染，避免 tool → system 映射后被当作 markdown 显示
             // 文件/图片/视频卡片展示
             var fname = msgRef._fileName || '';
             var fcontent = content;
@@ -1624,6 +1788,8 @@ async function openFileInBrowser(filePath) {
             } else {
                 contentHtml = '<div class="markdown-body">' + renderMarkdown(content) + '</div>';
             }
+        } else if (role === 'system') {
+            contentHtml = '<div class="markdown-body system-message">' + renderMarkdown(content) + '</div>';
         } else {
             contentHtml = '<div class="markdown-body">' + renderMarkdown(content) + '</div>';
         }
@@ -1859,20 +2025,25 @@ async function openFileInBrowser(filePath) {
     }
 
     // 创建命令执行结果折叠块（与 plugin-block 相同样式，用于 executeCmdViaPlugin）
+    function toggleCmdBlock(block) {
+        block.classList.toggle('collapsed');
+        var body = block.querySelector('.plugin-block-body');
+        if (body) body.style.display = block.classList.contains('collapsed') ? 'none' : '';
+    }
+
     function createCmdBlock(title, bodyText) {
         var bid = 'cb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-        var tokens = estimateTokens(bodyText);
-        var tokensHtml = tokens > 0 ? '<span class="pb-tokens">( ' + formatTokens(tokens) + 'Tokens )</span>' : '';
         var block = document.createElement('div');
         block.className = 'plugin-block cmd-block collapsed';
         block.id = bid;
         block.innerHTML =
             '<div class="plugin-block-header">' +
             '<span class="plugin-block-title">' + escapeHtml(title) + '</span>' +
-            tokensHtml +
             '<button class="cmd-block-edit" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#999;display:flex;align-items:center;padding:2px 6px;border-radius:4px;font-size:12px;">编辑</button>' +
             '</div>' +
-            '<div class="plugin-block-body" style="white-space:pre-wrap;">' + escapeHtml(bodyText || ' ') + '</div>';
+            '<div class="plugin-block-body" style="white-space:pre-wrap;display:none;">' + escapeHtml(bodyText || ' ') + '</div>';
+        var header = block.querySelector('.plugin-block-header');
+        if (header) header.onclick = function(e) { if (!e.target.closest('.cmd-block-edit')) toggleCmdBlock(block); };
         var editBtn = block.querySelector('.cmd-block-edit');
         if (editBtn) {
             editBtn.onclick = function(e) {
@@ -2051,10 +2222,9 @@ async function openFileInBrowser(filePath) {
             var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
+                '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
                 '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
+                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
         // Replace cmd/command blocks
@@ -2064,10 +2234,9 @@ async function openFileInBrowser(filePath) {
             var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
+                '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
                 '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
+                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
         // Replace shell blocks
@@ -2077,10 +2246,9 @@ async function openFileInBrowser(filePath) {
             var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
             return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="pb-tokens">( ' + formatTokens(estimateTokens(cmd.trim())) + 'Tokens )</span>' +
+                '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
                 '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
+                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(cmd.trim()) + '</div>' +
                 '</div>');
         });
         // Replace mem:key blocks
@@ -2090,7 +2258,6 @@ async function openFileInBrowser(filePath) {
             return _pluginMark('<div class="plugin-block mem-block collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
                 '</div>');
@@ -2100,12 +2267,11 @@ async function openFileInBrowser(filePath) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: false, type: 'cmd', content: content.trim() };
             var contentShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
-            return _pluginMark('<div class="plugin-block cmd-block streaming" id="' + bid + '">' +
+            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title"><span class="exec-cmd-label">正在执行:</span>' + escapeHtml(contentShort) + '</span>' +
-                '<span class="pb-tokens">( ' + formatTokens(estimateTokens(content.trim())) + 'Tokens )</span>' +
+                '<span class="plugin-block-title">' + escapeHtml(contentShort) + '</span>' +
                 '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
+                '<div class="plugin-block-body" style="display:none;">' + escapeHtml(content.trim()) + '</div>' +
                 '</div>');
         });
         // mem:key 未闭合
@@ -2115,7 +2281,6 @@ async function openFileInBrowser(filePath) {
             return _pluginMark('<div class="plugin-block mem-block streaming collapsed" id="' + bid + '">' +
                 '<div class="plugin-block-header">' +
                 '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
-                '<span class="pb-tokens">( 0Tokens )</span>' +
                 '</div>' +
                 '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
                 '</div>');
@@ -2214,15 +2379,11 @@ async function openFileInBrowser(filePath) {
             if (emptyHint) emptyHint.style.display = 'block';
         } else {
             if (emptyHint) emptyHint.style.display = 'none';
-            var bubbles = [];
             chats[idx].forEach(function(m) {
                 if (!m.role) return;
-                var r = m.role === 'system' || m.role === 'tool' ? 'system' : (m.role === 'user' ? 'user' : 'ai');
-                var b = addMessage(m.content, r, m.images || [], m.reasoning, m);
-                bubbles.push({ bubble: b, role: r, msg: m });
+                var r = m.role === 'system' ? 'system' : (m.role === 'user' ? 'user' : 'ai');
+                addMessage(m.content, r, m.images || [], m.reasoning, m);
             });
-            // Re-apply agent iteration collapse for reloaded chats
-            applyAgentCollapse(bubbles);
         }
         updateHistoryList();
         updateHeaderTitle();
@@ -2238,80 +2399,6 @@ async function openFileInBrowser(filePath) {
         if (emptyHint) { emptyHint.style.display = 'block'; emptyHint.textContent = _('whatCanIDo'); }
         updateHistoryList();
         updateHeaderTitle();
-    }
-
-    function applyAgentCollapse(bubbles) {
-        if (!bubbles || !bubbles.length) return;
-        // Find groups of AI messages separated only by system messages (agent iterations)
-        var i = 0;
-        while (i < bubbles.length) {
-            if (bubbles[i].role !== 'ai') { i++; continue; }
-            // Collect all AI indices in this agent round (skip system messages between them, stop at user)
-            var aiIndices = [i];
-            var peek = i + 1;
-            while (peek < bubbles.length) {
-                if (bubbles[peek].role === 'system') { peek++; continue; }
-                if (bubbles[peek].role === 'ai') { aiIndices.push(peek); peek++; continue; }
-                break; // user or other role - end of this agent round
-            }
-            var groupSize = aiIndices.length;
-            if (groupSize > 1) {
-                // Collapse all AI bubbles except the last one
-                for (var ai = 0; ai < groupSize - 1; ai++) {
-                    var gi = aiIndices[ai];
-                    var bub = bubbles[gi].bubble;
-                    if (!bub) continue;
-                    var iterNum = ai + 1;
-                    bub.dataset.agentIter = iterNum;
-                    // Wrap content
-                    var contentWrap = document.createElement('div');
-                    contentWrap.className = 'agent-iter-content';
-                    while (bub.firstChild) contentWrap.appendChild(bub.firstChild);
-                    bub.appendChild(contentWrap);
-                    // Create toggle header
-                    var toggleHeader = document.createElement('div');
-                    toggleHeader.className = 'agent-iter-toggle';
-                    toggleHeader.style.cssText = 'font-size:12px;color:#9b968b;cursor:pointer;padding:4px 0;user-select:none;display:flex;align-items:center;gap:6px;';
-                    toggleHeader.innerHTML = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M5.5 2.15L5.92 2.58L8.65 5.3C8.91 5.56 9.13 5.78 9.3 5.99C9.47 6.2 9.62 6.44 9.67 6.75C9.69 6.92 9.69 7.08 9.67 7.25C9.62 7.56 9.47 7.8 9.3 8.01C9.13 8.22 8.91 8.44 8.65 8.7L5.92 11.42L5.5 11.85L4.65 11L5.08 10.58L7.8 7.85C8.08 7.57 8.25 7.4 8.36 7.26C8.47 7.13 8.48 7.08 8.48 7.06C8.49 7.02 8.49 6.98 8.48 6.94C8.48 6.92 8.47 6.87 8.36 6.74C8.25 6.6 8.08 6.43 7.8 6.15L5.08 3.42L4.65 3L5.5 2.15Z" fill="currentColor"/></svg>';
-                    // toggle text removed
-                    bub.insertBefore(toggleHeader, contentWrap);
-                    // Default to expanded (visible) state
-                    bub.dataset.agentCollapsed = '0';
-                    contentWrap.style.display = '';
-                    bub.style.opacity = '1';
-                    toggleHeader.querySelector('svg').style.transform = 'rotate(90deg)';
-                    // Collect system messages between this AI and the next AI (or end)
-                    var sysList = [];
-                    var nextAiIdx = (ai + 1 < groupSize) ? aiIndices[ai + 1] : bubbles.length;
-                    for (var si = gi + 1; si < nextAiIdx; si++) {
-                        if (bubbles[si].role === 'system' && bubbles[si].bubble) {
-                            bubbles[si].bubble.style.display = '';
-                            sysList.push(bubbles[si].bubble);
-                        }
-                    }
-                    // Click handler
-                    toggleHeader.onclick = function(hdr, wrap, b, sList) {
-                        return function() {
-                            var isCollapsed = b.dataset.agentCollapsed === '1';
-                            if (isCollapsed) {
-                                b.dataset.agentCollapsed = '0';
-                                wrap.style.display = '';
-                                b.style.opacity = '1';
-                                hdr.querySelector('svg').style.transform = 'rotate(90deg)';
-                                sList.forEach(function(s) { if (s) s.style.display = ''; });
-                            } else {
-                                b.dataset.agentCollapsed = '1';
-                                wrap.style.display = 'none';
-                                b.style.opacity = '0.5';
-                                hdr.querySelector('svg').style.transform = '';
-                                sList.forEach(function(s) { if (s) s.style.display = 'none'; });
-                            }
-                        };
-                    }(toggleHeader, contentWrap, bub, sysList);
-                }
-            }
-            i = aiIndices[groupSize - 1] + 1;
-        }
     }
 
     function updateHistoryTitle() {
