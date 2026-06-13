@@ -2497,9 +2497,14 @@ async function openFileInBrowser(filePath) {
         _pendingAsk = null;
         var existing = document.querySelector('.ask-overlay');
         if (existing) existing.remove();
-        var ta = isChatActive ? chatText : initText;
-        var container = isChatActive ? document.getElementById('bottomInputContainer') : (ta ? ta.closest('.center-initial') : null);
-        if (!container || !container.offsetParent) container = document.querySelector('.input-wrapper-outer')?.closest('.bottom-input-container, .center-initial') || document.body;
+        var wrappers = document.querySelectorAll('.input-wrapper-outer');
+        var inputWrapper = null;
+        for (var wi = 0; wi < wrappers.length; wi++) {
+            if (wrappers[wi].offsetParent !== null) { inputWrapper = wrappers[wi]; break; }
+        }
+        if (!inputWrapper) {
+            inputWrapper = { getBoundingClientRect: function() { return { width: 400, left: 20, top: window.innerHeight - 100 }; } };
+        }
         var overlay = document.createElement('div');
         overlay.className = 'ask-overlay';
         var optionsHtml = data.options.map(function(o) {
@@ -2507,14 +2512,13 @@ async function openFileInBrowser(filePath) {
         }).join('');
         overlay.innerHTML = '<div class="ask-panel"><div class="ask-panel-question">' + escapeHtml(data.question) + '</div><div class="ask-panel-options">' + optionsHtml + '<button class="ask-option-btn ask-option-none">什么都不选</button></div></div>';
         document.body.appendChild(overlay);
-        var cr = container.getBoundingClientRect();
-        var pw = Math.min(cr.width, 600);
-        var left = cr.left + cr.width / 2 - pw / 2;
-        if (left < 10) { left = 10; pw = cr.width - 20; }
-        overlay.style.width = pw + 'px';
-        overlay.style.left = left + 'px';
-        overlay.style.bottom = (window.innerHeight - cr.top + 12) + 'px';
-        requestAnimationFrame(function() { overlay.classList.add('active'); });
+        requestAnimationFrame(function() {
+            var iwr = inputWrapper.getBoundingClientRect();
+            overlay.style.width = iwr.width + 'px';
+            overlay.style.left = iwr.left + 'px';
+            overlay.style.bottom = (window.innerHeight - iwr.top + 10) + 'px';
+            overlay.classList.add('active');
+        });
         overlay.querySelectorAll('.ask-option-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var answer = this.dataset.value;

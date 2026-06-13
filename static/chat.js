@@ -661,7 +661,24 @@
                 }
                 var newBubble = createMessageBubble(fullContent, 'ai', [], agentReasoningDiv._fullReasoning || null, agentAssistantMsg, '');
                 bubble.replaceWith(newBubble);
-                if (typeof showAskPopup === 'function' && _pendingAsk && typeof askAutoShow !== 'undefined' && askAutoShow) showAskPopup();
+                if (typeof askAutoShow !== 'undefined' && askAutoShow) {
+                    if (_pendingAsk) { showAskPopup(); }
+                    else {
+                        var askIn = fullContent.indexOf('<ask>');
+                        console.log('[Agent] ask in content:', askIn >= 0, 'len:', (fullContent||'').length, 'pendingAsk:', !!_pendingAsk);
+                        if (askIn >= 0) {
+                            var am = fullContent.match(/<ask>([\s\S]*?)<\/ask>/i);
+                            if (am) {
+                                var inner = am[1], qm = inner.match(/<q=([^>]*)>/);
+                                if (qm) {
+                                    var opts = [];
+                                    inner.replace(/<o\d=([^>]*)>/gi, function(m, v) { opts.push(v.trim()); });
+                                    if (opts.length) { _pendingAsk = { question: qm[1].trim(), options: opts }; showAskPopup(); }
+                                }
+                            }
+                        }
+                    }
+                }
                 streaming = false; currentAbortController = null; updateSendBtn();
                 updateHistoryTitle(); saveChatToBackend();
                 return;
