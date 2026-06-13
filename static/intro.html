@@ -874,45 +874,6 @@
     </div>
     <div class="toast" id="toast" style="opacity:0;pointer-events:none;"></div>
     <input type="file" id="hiddenFileInput" multiple style="display:none;" accept="image/*,.txt,.md,.json,.js,.py,.ts,.jsx,.tsx,.css,.html,.csv,.xml,.yaml,.yml,.log,video/*">
-
-    <!-- 终端面板 -->
-    <div class="terminal-overlay" id="terminalOverlay">
-        <div class="terminal-panel" id="terminalPanel">
-            <div class="terminal-header">
-                <h2>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-                    </svg>
-                    终端
-                </h2>
-                <button class="terminal-close-btn" id="terminalCloseBtn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="terminal-tabs">
-                <button class="terminal-tab active" data-tab="exec">执行</button>
-                <button class="terminal-tab" data-tab="history">历史命令</button>
-            </div>
-            <div class="terminal-body" id="terminalBody">
-                <!-- 执行面板 -->
-                <div class="terminal-exec-panel" id="terminalExecPanel">
-                    <div class="terminal-output" id="terminalOutput"></div>
-                    <div class="terminal-input-row">
-                        <span class="terminal-prompt">$</span>
-                        <input type="text" class="terminal-input" id="terminalInput" placeholder="输入命令..." autofocus>
-                        <button class="terminal-send-btn" id="terminalSendBtn">执行</button>
-                    </div>
-                </div>
-                <!-- 历史命令面板 -->
-                <div class="terminal-history-panel" id="terminalHistoryPanel" style="display:none;">
-                    <div class="terminal-history-empty" id="terminalHistoryEmpty">暂无历史命令</div>
-                    <div class="terminal-history-list" id="terminalHistoryList"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- 设置模态框 -->

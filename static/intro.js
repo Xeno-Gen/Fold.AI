@@ -1305,88 +1305,122 @@ async function openFileInBrowser(filePath) {
         try { var res = await fetch('/api/provider/' + providerId + '/keys/use', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: index }) }); return res.ok; } catch (e) { return false; }
     }
 
+    if (window.CustomProvider) CustomProvider.initCustomProviders();
+
+    // ========== 终端（嵌入右侧边栏） ==========
+    var cmdHistory = []; // { cmd, shell, result, exitCode, time, fromModel }
+    var _drawerMode = 'settings'; // 'settings' | 'terminal'
+    var drawerTitle = $('drawerTitle');
+
     function openDrawer() {
         drawerOverlay.classList.add('active');
-        mergeCustomProviders();
-        // 若当前选中的自定义提供商已被删除，重置为第一个可用提供商
-        if (currentProvider && currentProvider.startsWith('custom_') && !providers.some(function(p) { return p.id === currentProvider; })) {
-            currentProvider = providers.length > 0 ? providers[0].id : null;
-            saveConfigToBackend();
+        if (_drawerMode === 'settings') {
+            drawerTitle.textContent = '设置';
+            mergeCustomProviders();
+            if (currentProvider && currentProvider.startsWith('custom_') && !providers.some(function(p) { return p.id === currentProvider; })) {
+                currentProvider = providers.length > 0 ? providers[0].id : null;
+                saveConfigToBackend();
+            }
+            loadConfigFromBackend().then(function() { renderDrawer(); });
+        } else {
+            drawerTitle.textContent = '终端';
+            renderTerminalDrawer();
         }
-        loadConfigFromBackend().then(function() { renderDrawer(); });
     }
     window.openDrawer = openDrawer;
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
-    function toggleDrawer() { if (drawerOverlay.classList.contains('active')) closeDrawer(); else openDrawer(); }
-    settingsBtn.onclick = toggleDrawer;
-    initialSettingsBtn.onclick = toggleDrawer;
+    function toggleDrawer(mode) {
+        if (mode) _drawerMode = mode;
+        if (drawerOverlay.classList.contains('active') && _drawerMode === (mode || 'settings')) {
+            closeDrawer();
+        } else {
+            if (mode) _drawerMode = mode;
+            openDrawer();
+        }
+    }
+    settingsBtn.onclick = function() { toggleDrawer('settings'); };
+    initialSettingsBtn.onclick = function() { toggleDrawer('settings'); };
     document.addEventListener('click', function(e) {
         if (e.target.closest('.drawer-close-btn')) closeDrawer();
     });
-    if (window.CustomProvider) CustomProvider.initCustomProviders();
 
-    // ========== 终端 ==========
-    var terminalOverlay = $('terminalOverlay');
-    var terminalPanel = $('terminalPanel');
-    var terminalOutput = $('terminalOutput');
-    var terminalInput = $('terminalInput');
-    var terminalSendBtn = $('terminalSendBtn');
-    var terminalCloseBtn = $('terminalCloseBtn');
-    var terminalHistoryList = $('terminalHistoryList');
-    var terminalHistoryEmpty = $('terminalHistoryEmpty');
-    var cmdHistory = []; // { cmd, shell, result, exitCode, time, fromModel }
-    var terminalExecHistory = []; // for up-arrow recall within session
+    var _terminalOutputRendered = false;
 
-    function openTerminal() {
-        terminalOverlay.classList.add('active');
-        if (terminalOutput && terminalOutput.children.length === 0) {
-            termPrint('Fold.AI 终端', 'term-system');
-            termPrint('输入命令并按 Enter 执行', 'term-system');
-            termPrint('---', 'term-system');
-        }
-        terminalInput.focus();
-    }
-    function closeTerminal() { terminalOverlay.classList.remove('active'); }
-    function toggleTerminal() {
-        if (terminalOverlay.classList.contains('active')) closeTerminal();
-        else openTerminal();
-    }
+    function renderTerminalDrawer() {
+        if (!drawerBody) return;
+        var html =
+            '<div class="terminal-tabs" id="terminalTabs">' +
+            '<button class="terminal-tab active" data-tab="exec">执行</button>' +
+            '<button class="terminal-tab" data-tab="history">历史命令</button>' +
+            '</div>' +
+            '<div class="terminal-output" id="terminalOutput">' +
+            '<div class="term-line term-system">Fold.AI 终端</div>' +
+            '<div class="term-line term-system">输入命令并按 Enter 执行</div>' +
+            '<div class="term-line term-system">---</div>' +
+            '</div>' +
+            '<div class="terminal-history-panel" id="terminalHistoryPanel" style="display:none;">' +
+            '<div class="terminal-history-empty" id="terminalHistoryEmpty">暂无历史命令</div>' +
+            '<div class="terminal-history-list" id="terminalHistoryList"></div>' +
+            '</div>' +
+            '<div class="terminal-input-row">' +
+            '<span class="terminal-prompt">$</span>' +
+            '<input type="text" class="terminal-input" id="terminalInput" placeholder="输入命令...">' +
+            '<button class="terminal-send-btn" id="terminalSendBtn">执行</button>' +
+            '</div>';
+        drawerBody.innerHTML = html;
+        _terminalOutputRendered = true;
 
-    // 终端 tab 切换
-    document.addEventListener('click', function(e) {
-        var tab = e.target.closest('.terminal-tab');
-        if (!tab) return;
-        var tabName = tab.dataset.tab;
-        document.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
-        tab.classList.add('active');
-        var execPanel = document.getElementById('terminalExecPanel');
-        var histPanel = document.getElementById('terminalHistoryPanel');
-        if (tabName === 'exec') {
-            execPanel.style.display = 'flex';
-            histPanel.style.display = 'none';
+        // 绑定事件
+        var terminalInput = $('terminalInput');
+        var terminalSendBtn = $('terminalSendBtn');
+        if (terminalSendBtn) terminalSendBtn.onclick = function() { executeTerminalCommand(terminalInput.value); };
+        if (terminalInput) {
+            terminalInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') executeTerminalCommand(terminalInput.value);
+            });
             setTimeout(function() { terminalInput.focus(); }, 100);
-        } else {
-            execPanel.style.display = 'none';
-            histPanel.style.display = 'flex';
-            renderTerminalHistory();
         }
-    });
+        // tab 切换
+        var tabsContainer = $('terminalTabs');
+        if (tabsContainer) {
+            tabsContainer.addEventListener('click', function(e) {
+                var tab = e.target.closest('.terminal-tab');
+                if (!tab) return;
+                var tabName = tab.dataset.tab;
+                tabsContainer.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
+                tab.classList.add('active');
+                var execOutput = $('terminalOutput');
+                var histPanel = $('terminalHistoryPanel');
+                if (tabName === 'exec') {
+                    execOutput.style.display = '';
+                    histPanel.style.display = 'none';
+                    setTimeout(function() { if (terminalInput) terminalInput.focus(); }, 100);
+                } else {
+                    execOutput.style.display = 'none';
+                    histPanel.style.display = '';
+                    renderTerminalHistory();
+                }
+            });
+        }
+    }
 
     function termPrint(text, cls) {
-        if (!terminalOutput) return;
+        var output = $('terminalOutput');
+        if (!output) return;
         var line = document.createElement('div');
         line.className = 'term-line ' + (cls || 'term-stdout');
         line.textContent = text;
-        terminalOutput.appendChild(line);
-        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        output.appendChild(line);
+        output.scrollTop = output.scrollHeight;
     }
 
     async function executeTerminalCommand(cmdText) {
         if (!cmdText || !cmdText.trim()) return;
         termPrint('$ ' + cmdText, 'term-prompt');
-        terminalInput.value = '';
-        terminalSendBtn.disabled = true;
-        terminalExecHistory.push(cmdText.trim());
+        var terminalInput = $('terminalInput');
+        var terminalSendBtn = $('terminalSendBtn');
+        if (terminalInput) terminalInput.value = '';
+        if (terminalSendBtn) terminalSendBtn.disabled = true;
         try {
             var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
             var res = await fetch('/api/plugin/CommandExecution/execute', {
@@ -1408,82 +1442,77 @@ async function openFileInBrowser(filePath) {
         } catch (e) {
             termPrint('Error: ' + e.message, 'term-stderr');
         } finally {
-            terminalSendBtn.disabled = false;
-            terminalInput.focus();
+            if (terminalSendBtn) terminalSendBtn.disabled = false;
+            var inp = $('terminalInput');
+            if (inp) inp.focus();
         }
     }
 
     // 添加模型命令历史（由 chat.js 调用）
     window.addCmdHistory = function(cmd, shell, result, exitCode) {
-        cmdHistory.push({ cmd: cmd, shell: shell, result: result, exitCode: exitCode, time: new Date(), fromModel: true });
+        cmdHistory.push({ cmd: cmd, shell: shell, result: result || '', exitCode: exitCode, time: new Date(), fromModel: true });
     };
 
     function renderTerminalHistory() {
-        if (!terminalHistoryList) return;
+        var list = $('terminalHistoryList');
+        var empty = $('terminalHistoryEmpty');
+        if (!list) return;
         if (cmdHistory.length === 0) {
-            terminalHistoryList.innerHTML = '';
-            if (terminalHistoryEmpty) terminalHistoryEmpty.style.display = 'block';
+            list.innerHTML = '';
+            if (empty) empty.style.display = 'block';
             return;
         }
-        if (terminalHistoryEmpty) terminalHistoryEmpty.style.display = 'none';
+        if (empty) empty.style.display = 'none';
         var html = '';
-        // 从后往前显示（最新的在前面）
         for (var i = cmdHistory.length - 1; i >= 0; i--) {
             var h = cmdHistory[i];
             var label = h.fromModel ? '模型' : '用户';
-            var status = h.exitCode === 0 ? '✓' : '✗';
+            var statusText = h.exitCode === 0 ? '✓ 成功' : '✗ 失败 (code: ' + h.exitCode + ')';
             var statusCls = h.exitCode === 0 ? '' : ' error';
+            var resultPreview = h.result ? h.result.substring(0, 200) : '';
             var timeStr = '';
             if (h.time) {
                 var d = h.time;
                 timeStr = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0');
             }
-            html += '<div class="terminal-history-item" data-cmd="' + escapeHtml(h.cmd) + '" data-shell="' + escapeHtml(h.shell || '') + '">' +
-                '<div class="th-cmd">' + escapeHtml(h.cmd.length > 80 ? h.cmd.substring(0, 77) + '...' : h.cmd) + '</div>' +
-                '<div class="th-meta"><span>' + label + '</span><span class="th-status' + statusCls + '">' + status + '</span><span>' + timeStr + '</span></div>' +
+            html += '<div class="terminal-history-item" data-cmd="' + escapeHtml(h.cmd) + '">' +
+                '<div class="th-header">' +
+                '<div class="th-cmd">$ ' + escapeHtml(h.cmd.length > 60 ? h.cmd.substring(0, 57) + '...' : h.cmd) + '</div>' +
+                '<div class="th-status' + statusCls + '">' + statusText + '</div>' +
+                '</div>';
+            if (resultPreview) {
+                html += '<div class="th-result">' + escapeHtml(resultPreview) + '</div>';
+            }
+            html += '<div class="th-meta"><span>' + label + '</span> · <span>' + timeStr + '</span></div>' +
                 '</div>';
         }
-        terminalHistoryList.innerHTML = html;
-        // 点击历史项填充到执行输入框
-        terminalHistoryList.querySelectorAll('.terminal-history-item').forEach(function(item) {
+        list.innerHTML = html;
+        // 点击历史项填充到执行输入框并切回执行tab
+        list.querySelectorAll('.terminal-history-item').forEach(function(item) {
             item.addEventListener('click', function() {
                 var cmd = item.dataset.cmd;
-                if (cmd) {
-                    // 切换到执行 tab
-                    document.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
-                    document.querySelector('.terminal-tab[data-tab="exec"]').classList.add('active');
-                    document.getElementById('terminalExecPanel').style.display = 'flex';
-                    document.getElementById('terminalHistoryPanel').style.display = 'none';
-                    terminalInput.value = cmd;
-                    terminalInput.focus();
+                if (!cmd) return;
+                var tabs = $('terminalTabs');
+                if (tabs) {
+                    tabs.querySelectorAll('.terminal-tab').forEach(function(t) { t.classList.remove('active'); });
+                    var execTab = tabs.querySelector('.terminal-tab[data-tab="exec"]');
+                    if (execTab) execTab.classList.add('active');
                 }
+                var execOut = $('terminalOutput');
+                var histPanel = $('terminalHistoryPanel');
+                if (execOut) execOut.style.display = '';
+                if (histPanel) histPanel.style.display = 'none';
+                var inp = $('terminalInput');
+                if (inp) { inp.value = cmd; inp.focus(); }
             });
         });
     }
 
-    // 终端按钮事件
-    if (terminalSendBtn) {
-        terminalSendBtn.onclick = function() { executeTerminalCommand(terminalInput.value); };
-    }
-    if (terminalInput) {
-        terminalInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') executeTerminalCommand(terminalInput.value);
-        });
-    }
-    if (terminalCloseBtn) {
-        terminalCloseBtn.onclick = closeTerminal;
-    }
-    // 点击遮罩关闭
-    if (terminalOverlay) {
-        terminalOverlay.addEventListener('click', function(e) {
-            if (e.target === terminalOverlay) closeTerminal();
-        });
-    }
     // 工具栏按钮
     var initialTerminalBtn = document.getElementById('initialTerminalBtn');
     var chatTerminalBtn = document.getElementById('chatTerminalBtn');
-    if (initialTerminalBtn) initialTerminalBtn.onclick = toggleTerminal;
-    if (chatTerminalBtn) chatTerminalBtn.onclick = toggleTerminal;
+    if (initialTerminalBtn) initialTerminalBtn.onclick = function() { toggleDrawer('terminal'); };
+    if (chatTerminalBtn) chatTerminalBtn.onclick = function() { toggleDrawer('terminal'); };
 
     async function renderDrawer() {
         if (!drawerBody) return;
