@@ -632,7 +632,10 @@ async function callLLMStream(
 
     const openaiBody = {
         model: model || userConfig.currentModel || 'deepseek-v4-flash',
-        messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+        messages: messages.map((m: any) => {
+            if (m.role === 'tool') return { role: 'user', content: m.content };
+            return { role: m.role, content: m.content };
+        }),
         temperature: params.temperature ?? 0.6,
         top_p: params.top_p ?? 1.0,
         max_tokens: params.max_tokens ?? 4096,
