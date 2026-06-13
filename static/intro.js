@@ -1362,137 +1362,24 @@ async function openFileInBrowser(filePath) {
             }
             loadConfigFromBackend().then(function() { renderDrawer(); });
         } else {
-            drawerTitle.textContent = '命令执行记录';
             drawerBody.style.padding = '0';
-            if (dh) dh.style.display = '';
-            renderCmdLog();
+            if (dh) dh.style.display = 'none';
+            drawerBody.innerHTML = '<div style="padding:20px;color:#888;text-align:center;font-size:13px;">暂无内容</div>';
         }
     }
     window.openDrawer = openDrawer;
     function closeDrawer() { drawerOverlay.classList.remove('active'); }
-    function toggleDrawer(mode) {
-        if (mode && mode !== _drawerMode && drawerOverlay.classList.contains('active')) {
-            _drawerMode = mode;
-            openDrawer();
-        } else if (drawerOverlay.classList.contains('active')) {
-            closeDrawer();
-        } else {
-            if (mode) _drawerMode = mode;
-            openDrawer();
-        }
+    function toggleDrawer() {
+        if (drawerOverlay.classList.contains('active')) closeDrawer();
+        else openDrawer();
     }
-    settingsBtn.onclick = function() { toggleDrawer('settings'); };
-    initialSettingsBtn.onclick = function() { toggleDrawer('settings'); };
+    settingsBtn.onclick = toggleDrawer;
+    initialSettingsBtn.onclick = toggleDrawer;
     document.addEventListener('click', function(e) {
         if (e.target.closest('.drawer-close-btn')) closeDrawer();
     });
 
-    function renderCmdLog() {
-        if (!drawerBody) return;
-        var msgs = chats[currentChat] || [];
-        var execMsgs = [];
-        for (var i = 0; i < msgs.length; i++) {
-            if (msgs[i] && msgs[i]._isExec) execMsgs.push(msgs[i]);
-        }
-        if (execMsgs.length === 0) {
-            drawerBody.innerHTML = '<div class="cmdlog-container"><div class="cmdlog-empty">暂无命令执行记录</div></div>';
-            return;
-        }
-        var html = '<div class="cmdlog-container"><div class="cmdlog-list">';
-        for (var i = 0; i < execMsgs.length; i++) {
-            var m = execMsgs[i];
-            var cmd = m._execTitle || '';
-            var body = m.content || '';
-            var lines = body.split('\n');
-            var exitLine = '';
-            var resultText = body;
-            for (var j = lines.length - 1; j >= 0; j--) {
-                if (lines[j].indexOf('exit code:') !== -1 || lines[j].indexOf('退出码:') !== -1) {
-                    exitLine = lines[j];
-                    resultText = lines.slice(0, j).join('\n').trim();
-                    break;
-                }
-            }
-            var exitCodeMatch = exitLine.match(/(\d+)/);
-            var exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : -1;
-            var exitCls = exitCode === 0 ? 'ok' : 'fail';
-            var timeStr = '';
-            if (m._time) {
-                var d = new Date(m._time);
-                timeStr = d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')+':'+d.getSeconds().toString().padStart(2,'0');
-            }
-            var resultPreview = resultText ? resultText.substring(0, 150) : '';
-            html += '<div class="cmdlog-item">' +
-                '<input type="checkbox" class="cl-cb" data-idx="' + i + '">' +
-                '<div class="cl-body">' +
-                '<div class="cl-cmd"><span class="cl-prompt">$</span> ' + escapeHtml(cmd) + '</div>' +
-                (resultPreview ? '<div class="cl-result">' + escapeHtml(resultPreview) + '</div>' : '') +
-                '<div class="cl-meta"><span class="cl-exit ' + exitCls + '">' + (exitCode === 0 ? '✓ 成功' : '✗ code: ' + exitCode) + '</span>' + (timeStr ? ' · ' + timeStr : '') + '</div>' +
-                '</div></div>';
-        }
-        html += '</div>' +
-            '<div class="cmdlog-bar">' +
-            '<span class="cl-count" id="clCount">已选 0 条</span>' +
-            '<button class="cmdlog-ask-btn" id="cmdlogAskBtn" disabled>询问模型</button>' +
-            '</div></div>';
-        drawerBody.innerHTML = html;
-        var list = drawerBody.querySelector('.cmdlog-list');
-        if (list) {
-            list.addEventListener('change', function(e) {
-                if (e.target.classList.contains('cl-cb')) _updateCmdlogCount();
-            });
-        }
-        var askBtn = $('cmdlogAskBtn');
-        if (askBtn) askBtn.onclick = _askModelAboutCmds;
-    }
-
-    function _updateCmdlogCount() {
-        var cbs = drawerBody ? drawerBody.querySelectorAll('.cl-cb:checked') : [];
-        var count = $('clCount');
-        var btn = $('cmdlogAskBtn');
-        if (count) count.textContent = '已选 ' + cbs.length + ' 条';
-        if (btn) btn.disabled = cbs.length === 0;
-    }
-
-    function _askModelAboutCmds() {
-        if (!drawerBody) return;
-        var cbs = drawerBody.querySelectorAll('.cl-cb:checked');
-        if (cbs.length === 0) return;
-        var msgs = chats[currentChat] || [];
-        var execMsgs = [];
-        for (var i = 0; i < msgs.length; i++) {
-            if (msgs[i] && msgs[i]._isExec) execMsgs.push(msgs[i]);
-        }
-        var text = '以下是之前执行的命令及其结果，请基于这些信息：\n\n';
-        cbs.forEach(function(cb) {
-            var idx = parseInt(cb.dataset.idx);
-            var m = execMsgs[idx];
-            text += '---\n';
-            text += '命令: ' + (m._execTitle || '') + '\n';
-            text += '结果:\n' + (m.content || '') + '\n';
-        });
-        closeDrawer();
-        if (isChatActive && chatText) {
-            chatText.value = text;
-            chatText.style.height = 'auto';
-            chatText.style.height = chatText.scrollHeight + 'px';
-            updateSendBtn();
-            chatText.focus();
-        } else if (initText) {
-            initText.value = text;
-            initText.style.height = 'auto';
-            initText.style.height = initText.scrollHeight + 'px';
-            updateSendBtn();
-            initText.focus();
-        }
-    }
-
     window.addCmdHistory = function(cmd, shell, result, exitCode) {};
-
-    var initialTerminalBtn = document.getElementById('initialTerminalBtn');
-    var chatTerminalBtn = document.getElementById('chatTerminalBtn');
-    if (initialTerminalBtn) initialTerminalBtn.onclick = function() { toggleDrawer('terminal'); };
-    if (chatTerminalBtn) chatTerminalBtn.onclick = function() { toggleDrawer('terminal'); };
 
     async function renderDrawer() {
         if (!drawerBody) return;
