@@ -64,6 +64,7 @@ window.showToast = function(msg) {
     var includeReasoning = true;
     var chatFontSize = 15;
     var drawerWidth = '33%';
+    var drawerPosition = 'right';
     var lastScrollTop = 0;
     var baseSystemPrompt = '';
     var baseSystemTokenCount = 0;
@@ -137,6 +138,7 @@ window.showToast = function(msg) {
                 if (s.usedAsks) _usedAsks = s.usedAsks;
                 if (s.maxContextTokens !== undefined) maxContextTokens = s.maxContextTokens;
                 if (s.drawerWidth) { drawerWidth = s.drawerWidth; document.documentElement.style.setProperty('--drawer-width', drawerWidth); }
+                if (s.drawerPosition) drawerPosition = s.drawerPosition;
             }
         } catch (e) {}
         applyTheme(currentTheme);
@@ -144,11 +146,15 @@ window.showToast = function(msg) {
         try { var sf = localStorage.getItem('fold_chat_font'); if (sf) document.documentElement.style.setProperty('--chat-font', sf); } catch (e) {}
         try { var fs = localStorage.getItem('fold_chat_fontsize'); if (fs) { chatFontSize = parseInt(fs) || 15; document.documentElement.style.setProperty('--chat-font-size', chatFontSize + 'px'); } } catch (e) {}
         if (drawerWidth) document.documentElement.style.setProperty('--drawer-width', drawerWidth);
+        if (drawerPosition === 'left') {
+            var doEl = document.getElementById('drawerOverlay');
+            if (doEl) doEl.classList.add('drawer-left');
+        }
     }
 
     function saveSettingsToLocal() {
         try {
-            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, sandboxEnabled: sandboxEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled, askAutoShow: askAutoShow, usedAsks: _usedAsks, drawerWidth: drawerWidth }));
+            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, sandboxEnabled: sandboxEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled, askAutoShow: askAutoShow, usedAsks: _usedAsks, drawerWidth: drawerWidth, drawerPosition: drawerPosition }));
         } catch (e) {}
     }
     function saveBranches() {
@@ -521,6 +527,9 @@ async function openFileInBrowser(filePath) {
             '<button class="think-mode-option' + (drawerWidth === '25%' ? ' active' : '') + '" data-width="25%">25%</button>' +
             '<button class="think-mode-option' + (!drawerWidth || drawerWidth === '33%' ? ' active' : '') + '" data-width="33%">33%</button>' +
             '<button class="think-mode-option' + (drawerWidth === '50%' ? ' active' : '') + '" data-width="50%">50%</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' + (_('drawerPosition') || '侧边栏位置') + '</span><div class="think-mode-selector" id="settingsDrawerPosition" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (drawerPosition === 'right' ? ' active' : '') + '" data-pos="right">' + (_('right') || '右侧') + '</button>' +
+            '<button class="think-mode-option' + (drawerPosition === 'left' ? ' active' : '') + '" data-pos="left">' + (_('left') || '左侧') + '</button></div></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('thinkAfterAutoCollapse') || '思考后自动折叠') + '</span><div class="think-mode-selector" id="settingsAutoCollapseToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (autoCollapseThink ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
             '<button class="think-mode-option' + (!autoCollapseThink ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
@@ -570,6 +579,17 @@ async function openFileInBrowser(filePath) {
                 document.documentElement.style.setProperty('--drawer-width', drawerWidth);
                 saveSettingsToLocal();
                 settingsPanelContent.querySelectorAll('#settingsDrawerWidth .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+        // 侧边栏位置
+        settingsPanelContent.querySelectorAll('#settingsDrawerPosition .think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                drawerPosition = o.dataset.pos;
+                var doEl = document.getElementById('drawerOverlay');
+                if (drawerPosition === 'left') { if (doEl) doEl.classList.add('drawer-left'); }
+                else { if (doEl) doEl.classList.remove('drawer-left'); }
+                saveSettingsToLocal();
+                settingsPanelContent.querySelectorAll('#settingsDrawerPosition .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
         // 思考后自动折叠

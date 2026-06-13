@@ -235,5 +235,8 @@ window.__I18N_EN__={
   "disabled": "Disabled",
   "pluginStatus": "Current Plugin Status",
   "runtime": "Runtime",
-  "drawerWidth": "Sidebar Width"
+  "drawerWidth": "Sidebar Width",
+  "drawerPosition": "Sidebar Position",
+  "right": "Right",
+  "left": "Left"
 };

@@ -522,6 +522,12 @@
         .drawer-overlay.active{
             width:var(--drawer-width, 33%);position:relative;z-index:46;
         }
+        .drawer-overlay.drawer-left{
+            order:-1;
+        }
+        .drawer-overlay.drawer-left .drawer{
+            border-left:none;border-right:0.5px solid var(--border,#e0e0e0);
+        }
         .drawer{
             width:100%;height:100%;display:flex;flex-direction:column;
             background:var(--bg,#fff);border-left:0.5px solid var(--border,#e0e0e0);
