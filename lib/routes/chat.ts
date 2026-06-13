@@ -621,7 +621,11 @@ function parseAgentCommands(text: string): { tag: string; cmd: string }[] {
     return cmds;
 }
 
-async function callLLM(messages: any[], provider: string, model: string, params: any, req: any): Promise<string> {
+async function callLLMStream(
+    messages: any[], provider: string, model: string, params: any, req: any,
+    onContent: (text: string) => void,
+    onReasoning?: (text: string) => void
+): Promise<{ content: string; reasoning: string }> {
     const userConfig = getUserConfig(req.userToken!);
     const apiKey = getUserProviderKey(req.userToken!, provider);
     const baseUrl = getUserProviderUrl(provider);
@@ -632,35 +636,50 @@ async function callLLM(messages: any[], provider: string, model: string, params:
         temperature: params.temperature ?? 0.6,
         top_p: params.top_p ?? 1.0,
         max_tokens: params.max_tokens ?? 4096,
-        stream: false,
+        stream: true,
+    };
+
+    const url = new URL(baseUrl!);
+    const mod = url.protocol === 'https:' ? require('https') : require('http');
+    const options = {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     };
 
     return new Promise((resolve, reject) => {
-        if (!baseUrl) { reject(new Error('API URL not configured')); return; }
-        const url = new URL(baseUrl);
-        const mod = url.protocol === 'https:' ? require('https') : require('http');
-        const options = {
-            hostname: url.hostname,
-            port: url.port || (url.protocol === 'https:' ? 443 : 80),
-            path: url.pathname,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-            },
-        };
         const httpreq = mod.request(options, (resp: any) => {
-            let data = '';
-            resp.on('data', (chunk: any) => data += chunk);
-            resp.on('end', () => {
-                try {
-                    const json = JSON.parse(data);
-                    const content = json.choices?.[0]?.message?.content || '';
-                    resolve(content);
-                } catch (e) {
-                    reject(new Error('parse error: ' + data.substring(0, 200)));
+            let buffer = '';
+            let fullContent = '';
+            let fullReasoning = '';
+            resp.on('data', (chunk: any) => {
+                buffer += chunk.toString();
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    const d = line.substring(6);
+                    if (d === '[DONE]') continue;
+                    try {
+                        const json = JSON.parse(d);
+                        const delta = json.choices?.[0]?.delta;
+                        if (delta) {
+                            if (delta.reasoning_content) {
+                                fullReasoning += delta.reasoning_content;
+                                if (onReasoning) onReasoning(delta.reasoning_content);
+                            }
+                            if (delta.content != null) {
+                                fullContent += delta.content;
+                                onContent(delta.content);
+                            }
+                        }
+                    } catch (e) {}
                 }
             });
+            resp.on('end', () => resolve({ content: fullContent, reasoning: fullReasoning }));
+            resp.on('error', reject);
         });
         httpreq.on('error', reject);
         httpreq.write(JSON.stringify(openaiBody));
@@ -714,18 +733,30 @@ chatRouter.post('/chat/agent', async (req: Request, res: Response) => {
             session.iteration = iter;
             res.write('data: ' + JSON.stringify({ type: 'iter_start', iteration: iter }) + '\n\n');
 
-            let content: string;
+            let fullContent = '';
+            let fullReasoning = '';
             try {
-                content = await callLLM(agentMessages, provider, model, params, req);
+                const result = await callLLMStream(agentMessages, provider, model, params, req,
+                    (chunk) => {
+                        fullContent += chunk;
+                        res.write('data: ' + JSON.stringify({ type: 'content', text: chunk, iteration: iter }) + '\n\n');
+                    },
+                    (chunk) => {
+                        fullReasoning += chunk;
+                        res.write('data: ' + JSON.stringify({ type: 'reasoning', text: chunk, iteration: iter }) + '\n\n');
+                    }
+                );
+                fullContent = result.content;
+                fullReasoning = result.reasoning;
             } catch (e: any) {
                 res.write('data: ' + JSON.stringify({ type: 'error', message: e.message }) + '\n\n');
                 break;
             }
 
-            agentMessages.push({ role: 'assistant', content });
-            res.write('data: ' + JSON.stringify({ type: 'content', text: content, iteration: iter }) + '\n\n');
+            agentMessages.push({ role: 'assistant', content: fullContent });
+            res.write('data: ' + JSON.stringify({ type: 'content_done', iteration: iter }) + '\n\n');
 
-            const cmds = parseAgentCommands(content);
+            const cmds = parseAgentCommands(fullContent);
             if (cmds.length === 0) {
                 res.write('data: ' + JSON.stringify({ type: 'iter_end', iteration: iter, commands: 0 }) + '\n\n');
                 break;

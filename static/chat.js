@@ -603,8 +603,10 @@
                 }
                 var agentCall = await callAgentAPI(iterMsgs);
                 bubble.innerHTML = '';
+                var agentReasoningDiv = document.createElement('div');
                 var agentContentDiv = document.createElement('div');
                 agentContentDiv.className = 'markdown-body';
+                bubble.appendChild(agentReasoningDiv);
                 bubble.appendChild(agentContentDiv);
                 var decoder = new TextDecoder();
                 var reader = agentCall.body.getReader();
@@ -626,6 +628,11 @@
                                 totalContent = evt.text;
                                 agentContentDiv.innerHTML = _renderAIContent(totalContent) || '...';
                                 updatePluginTimers(); restoreExpandedBlocks(); autoScroll();
+                            } else if (evt.type === 'reasoning') {
+                                var rt = (agentReasoningDiv._fullReasoning || '') + evt.text;
+                                agentReasoningDiv._fullReasoning = rt;
+                                agentReasoningDiv.innerHTML = createThinkBlock(rt, { isThinking: true });
+                                autoScroll();
                             } else if (evt.type === 'tool_start') {
                                 var tb = createCmdBlock(evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd, '执行中...');
                                 chatAreaInner.appendChild(tb);
