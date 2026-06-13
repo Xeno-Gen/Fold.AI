@@ -1905,10 +1905,10 @@ input:checked + .slider::before {
     pointer-events: all;
 }
 .ask-panel {
-    background: var(--card-bg, #fff);
+    background: #fff;
     border-radius: 22px;
     padding: 16px 18px 14px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+    box-shadow: var(--shadow-lg);
     border: 1px solid #e8e8e8;
     width: 100%;
     box-sizing: border-box;
@@ -1964,17 +1964,17 @@ input:checked + .slider::before {
     background: transparent;
 }
 [data-theme="dark"] .ask-panel {
-    background: #1a1a1a;
-    border-color: #2a2a2a;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    background: var(--input-bg);
+    border-color: var(--border);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
 [data-theme="dark"] .ask-option-btn {
-    background: #1f1f1f;
-    border-color: #2a2a2a;
-    color: #e8e8e8;
+    background: var(--input-bg);
+    border-color: var(--border);
+    color: var(--text);
 }
 [data-theme="dark"] .ask-option-btn:hover {
-    background: #2a2a2a;
+    background: var(--hover-bg);
     border-color: #444;
 }
 [data-theme="dark"] .ask-option-none {
