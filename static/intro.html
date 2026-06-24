@@ -79,7 +79,7 @@
             unicode-range: U+0,U+20-7E,U+A0-AC,U+AE-FF,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+2000-200B,U+2010-2027,U+202F-2055,U+2057,U+205F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+FEFF;
         }
     </style>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css?v=2">
     <link rel="stylesheet" href="/css/intro.css">
     <style>
         :root {
@@ -339,7 +339,7 @@
         }
 
         .chat-area{
-            width:100%;flex:1;overflow-y:auto;scrollbar-gutter:stable;padding:20px 0 16px;
+            width:100%;flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;padding:20px 0 16px;
             display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;
             opacity:0;pointer-events:none;max-height:0;
         }
@@ -545,7 +545,8 @@
             transition:all 0.15s;
         }
         .drawer-close:hover,.drawer-close-btn:hover{background:var(--hover-bg,#f0f0f0);color:#555;}
-        .drawer-body{flex:1;overflow-y:auto;padding:20px;}
+        .drawer-body{flex:1;overflow-y:auto;padding:20px;scrollbar-width:none;-ms-overflow-style:none;}
+        .drawer-body::-webkit-scrollbar{display:none;}
         .section-title{font-size:12px;font-weight:600;color:#999;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;}
         .provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:24px;}
         .provider-card{
@@ -633,6 +634,17 @@
             margin-top: 8px;
             padding-top: 6px;
             border-top: 0.5px solid #eee;
+        }
+        [data-theme="dark"] .base-prompt-section {
+            background: #1a1a1a;
+            border-color: #2a2a2a;
+        }
+        [data-theme="dark"] .base-prompt-display {
+            color: #bbb;
+        }
+        [data-theme="dark"] .base-prompt-meta {
+            color: #777;
+            border-top-color: #2a2a2a;
         }
         .pure-mode-toggle {
             display: flex;

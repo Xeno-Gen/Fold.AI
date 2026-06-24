@@ -67,6 +67,7 @@ window.__I18N_EN__={
   "memDeleted": "[mem] Deleted memory [",
   "exitCode": "Exit code: ",
   "noOutput": "(no output)",
+  "execResults": "Command Results",
   "provider": "Provider",
   "model": "Model",
   "thinkModeLabel": "Think mode: ",
@@ -195,7 +196,6 @@ window.__I18N_EN__={
   "hiddenText": "Hidden",
   "compressOldExec": "Compress old exec",
   "usage": "Usage",
-  "collapsePluginOutput": "Collapse plugin output",
   "includeReasoning": "Context deep thinking",
   "lastOutput": "Last output",
   "estimated": "Estimated",
@@ -224,7 +224,6 @@ window.__I18N_EN__={
   "close": "Close",
   "sandbox": "Sandbox",
   "cothink": "Chain of Thought",
-  "modelAsk": "Model Ask",
   "autoAskPopup": "Auto-show Ask",
   "streamOutput": "Stream Output",
   "agentMaxIter": "Max Agent Iterations",
@@ -237,6 +236,8 @@ window.__I18N_EN__={
   "runtime": "Runtime",
   "drawerWidth": "Sidebar Width",
   "drawerPosition": "Sidebar Position",
+  "uiScale": "UI Scale",
   "right": "Right",
-  "left": "Left"
+  "left": "Left",
+  "maxTokensWarning": "Model output reached max_tokens limit and was truncated. Increase max_tokens in settings or start a new conversation for a complete response."
 };

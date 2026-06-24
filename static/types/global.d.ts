@@ -26,7 +26,6 @@ declare var commandExecEnabled: boolean;
 declare var sandboxEnabled: boolean;
 declare var commandConfirmEnabled: boolean;
 declare var compressOldExecutions: boolean;
-declare var collapsePluginOutput: boolean;
 declare var memoryEnabled: boolean;
 declare var agentEnabled: boolean;
 declare var agentMaxIterations: number;

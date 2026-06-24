@@ -150,7 +150,9 @@ function processAnthropicStreamLine(line: string, fullContent: { current: string
                 // 可以忽略或处理初始消息
                 return null;
             } else if (type === 'message_delta') {
-                // delta stop_reason, 可以忽略
+                if (data.delta?.stop_reason) {
+                    return 'data: ' + JSON.stringify({ type: 'stop_reason', stop_reason: data.delta.stop_reason }) + '\n\n';
+                }
                 return null;
             } else if (type === 'message_stop') {
                 return 'data: [DONE]\n\n';
@@ -191,6 +193,9 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
         } = req.body;
 
         requestId = reqId || null;
+        // 标准化 max_tokens：前端传空字符串 = 不限制，不要用后端硬编码兜底
+        const cleanMt = (max_tokens !== undefined && max_tokens !== null && max_tokens !== '')
+            ? Number(max_tokens) : undefined;
         logger.info(`API chat: provider=${provider} model=${model} stream=${stream ?? false} messages=${(messages||[]).length}`);
 
         const userConfig = getUserConfig(req.userToken!);
@@ -270,9 +275,10 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                 messages: processedMessages,
                 temperature: temperature ?? params.temperature,
                 top_p: top_p ?? params.top_p,
-                max_tokens: max_tokens ?? params.max_tokens,
                 stream: stream ?? false,
             };
+            const mt = cleanMt ?? (params.max_tokens ? Number(params.max_tokens) : undefined);
+            if (mt) openaiBody.max_tokens = mt;
 
             if (seed !== null && seed !== undefined) openaiBody.seed = seed;
             else if (params.seed !== null) openaiBody.seed = params.seed;
@@ -320,7 +326,15 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             if (!upstreamResponse.ok) {
                 const err = await upstreamResponse.text();
                 if (requestId) activeControllers.delete(requestId);
-                return res.status(upstreamResponse.status).json({ error: err });
+                if (openaiBody.stream) {
+                    res.setHeader('Content-Type', 'text/event-stream');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.setHeader('Connection', 'keep-alive');
+                    res.write('data: ' + JSON.stringify({ type: 'error', content: err }) + '\n\n');
+                    res.write('data: [DONE]\n\n');
+                    return res.end();
+                }
+                return res.json({ type: 'error', content: err });
             }
 
             // 记录模型使用次数
@@ -434,7 +448,9 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
 
             const anthropicBody: any = {
                 model: model || userConfig.currentModel || 'claude-sonnet-4-6',
-                max_tokens: max_tokens || params.max_tokens || 4096,
+                max_tokens: cleanMt
+                    ?? (params.max_tokens ? Number(params.max_tokens) : undefined)
+                    ?? 65536,
                 messages: anthropicMessages,
                 temperature: temperature ?? params.temperature,
                 top_p: top_p ?? params.top_p,
@@ -472,7 +488,15 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
             if (!upstreamResponse.ok) {
                 const err = await upstreamResponse.text();
                 if (requestId) activeControllers.delete(requestId);
-                return res.status(upstreamResponse.status).json({ error: err });
+                if (anthropicBody.stream) {
+                    res.setHeader('Content-Type', 'text/event-stream');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.setHeader('Connection', 'keep-alive');
+                    res.write('data: ' + JSON.stringify({ type: 'error', content: err }) + '\n\n');
+                    res.write('data: [DONE]\n\n');
+                    return res.end();
+                }
+                return res.json({ type: 'error', content: err });
             }
 
             // 记录模型使用次数
@@ -509,6 +533,7 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                 const dummyReasoning = { current: '' };
                 let streamUsage: any = null;
                 let antAborted = false;
+                let antStopReason: string | null = null;
 
                 try {
                     while (true) {
@@ -530,6 +555,7 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                                         if (!streamUsage) streamUsage = {};
                                         streamUsage.output_tokens = d.usage.output_tokens;
                                         streamUsage.total_tokens = (streamUsage.input_tokens || 0) + d.usage.output_tokens;
+                                        if (d.delta?.stop_reason) antStopReason = d.delta.stop_reason;
                                     }
                                 } catch {}
                             }
@@ -547,6 +573,9 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
                     }
                     if (streamUsage) {
                         res.write('data: ' + JSON.stringify({ usage: streamUsage }) + '\n\n');
+                    }
+                    if (antStopReason) {
+                        res.write('data: ' + JSON.stringify({ type: 'stop_reason', stop_reason: antStopReason }) + '\n\n');
                     }
                     res.write('data: [DONE]\n\n');
                 } catch (e: any) {
@@ -605,6 +634,14 @@ const agentSessions = new Map<string, any>();
 
 function parseAgentCommands(text: string): { tag: string; cmd: string }[] {
     const cmds: { tag: string; cmd: string }[] = [];
+    // Only parse commands inside <Plugin-cmd> blocks
+    const pluginCmdRe = /<Plugin-cmd>([\s\S]*?)<\/Plugin-cmd>/gi;
+    let execText = '';
+    let m2;
+    while ((m2 = pluginCmdRe.exec(text)) !== null) {
+        execText += m2[1] + '\n';
+    }
+    if (!execText.trim()) return cmds;
     const patterns = [
         { tag: 'shell', re: /<shell>\s*([\s\S]*?)\s*<\/shell>/gi },
         { tag: 'powershell', re: /<powershell>\s*([\s\S]*?)\s*<\/powershell>/gi },
@@ -614,7 +651,7 @@ function parseAgentCommands(text: string): { tag: string; cmd: string }[] {
     ];
     for (const p of patterns) {
         let m;
-        while ((m = p.re.exec(text)) !== null) {
+        while ((m = p.re.exec(execText)) !== null) {
             cmds.push({ tag: p.tag, cmd: m[1].trim() });
         }
     }
@@ -630,7 +667,9 @@ async function callLLMStream(
     const apiKey = getUserProviderKey(req.userToken!, provider);
     const baseUrl = getUserProviderUrl(provider);
 
-    const openaiBody = {
+    const agMt = (params.max_tokens !== undefined && params.max_tokens !== null && params.max_tokens !== '')
+        ? Number(params.max_tokens) : undefined;
+    const openaiBody: any = {
         model: model || userConfig.currentModel || 'deepseek-v4-flash',
         messages: messages.map((m: any) => {
             if (m.role === 'tool') return { role: 'user', content: m.content };
@@ -638,9 +677,9 @@ async function callLLMStream(
         }),
         temperature: params.temperature ?? 0.6,
         top_p: params.top_p ?? 1.0,
-        max_tokens: params.max_tokens ?? 4096,
         stream: true,
     };
+    if (agMt) openaiBody.max_tokens = agMt;
 
     const url = new URL(baseUrl!);
     const mod = url.protocol === 'https:' ? require('https') : require('http');
@@ -692,14 +731,14 @@ async function callLLMStream(
     });
 }
 
-async function execCmdBackend(cmd: string, shell: string, workDir: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function execCmdBackend(cmd: string, shell: string, workDir: string, sandbox?: boolean): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const port = process.env.PORT || '17923';
     try {
         const url = `http://localhost:${port}/api/plugin/CommandExecution/execute`;
         const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ shell, command: cmd, timeout: 30000, workingDirectory: workDir, sandbox: true }),
+            body: JSON.stringify({ shell, command: cmd, timeout: 30000, workingDirectory: workDir, sandbox: sandbox !== false }),
         });
         if (res.ok) {
             const d: any = await res.json();
@@ -715,7 +754,7 @@ chatRouter.post('/chat/agent', async (req: Request, res: Response) => {
     const {
         messages, provider, model, temperature, top_p, max_tokens,
         seed, frequency_penalty, presence_penalty, top_k,
-        requestId: reqId, maxIterations, workingDirectory
+        requestId: reqId, maxIterations, workingDirectory, sandbox
     } = req.body;
 
     const requestId = reqId || 'agent-' + Date.now().toString(36);
@@ -779,7 +818,7 @@ chatRouter.post('/chat/agent', async (req: Request, res: Response) => {
 
                 res.write('data: ' + JSON.stringify({ type: 'tool_start', idx: ci, cmd: c.cmd, shell }) + '\n\n');
 
-                const result = await execCmdBackend(c.cmd, shell, workingDirectory || '');
+                const result = await execCmdBackend(c.cmd, shell, workingDirectory || '', sandbox);
                 const resultStr = (result.stdout || '') + (result.stderr ? '\n' + result.stderr : '') + '\nexit code: ' + result.exitCode;
                 agentMessages.push({ role: 'tool', content: resultStr });
 

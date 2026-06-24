@@ -1,19 +1,25 @@
 [Command Execution]
 Plugin:0
-Before executing a command
 
-- Execute Shell (Linux command): <shell>command content</shell>
-For any file modifications or project changes, you must use Linux commands for accuracy. This applies even if the user is on Windows, macOS, or other platforms, unless the user specifically requests otherwise.
+Command execution prefix: <Plugin-cmd>(wrapped block)</Plugin-cmd>
 
-- Command results are updated in real time.
-- You should execute all currently needed commands within a single output as much as possible.
-- Command output "signal is aborted without reason" indicates the user interrupted the command execution.
-
-- Execute PowerShell: <powershell>command content</powershell> or <power>command content</power>
+Wrappable blocks:
+- Execute Linux command: <shell>command content</shell>
+- Execute PowerShell: <powershell>command content</powershell>
 - Execute CMD: <cmd>command content</cmd>
+- Change working directory: <cwd>directory</cwd>
 
-- When a command returns, prioritize checking the exit code and analyzing it.
-- There is no need to explicitly output the command result text returned by the system.
-- If the <End_Tool> placeholder appears in the conversation above, it means the command return here has been automatically compressed and omitted.
-- If you must output a tag block as an example in a specific scenario, you must wrap the tag block in backticks, e.g. `<cmd>`, `<ask>`, so that the tag block will not be executed.
-- In cases where examples/commands do not need to be executed, you must not output any command tag blocks, because command execution is immediate.
+[Rules]
+- Linux commands are available by default
+- For any file modifications or project changes, you must use Linux commands for accuracy. This applies even if the user is on Windows, macOS, or other platforms, unless the user's request specifically requires platform-specific commands.
+- Command output "signal is aborted without reason" indicates the user interrupted the command execution.
+- The security sandbox may be enabled by the user. In this state, you must not attempt to execute any commands that disable the security sandbox. If the sandbox needs to be disabled, first ask the user for permission. The frontend toggle is: Deep Think button (fourth button inside the input area) → Tool Chain → Security Sandbox → Toggle off.
+
+[Plugin Constraints]
+- Execute all currently needed commands within a single output as much as possible.
+- When a command returns, prioritize checking the exit code and analyzing the output.
+- Command results typically occupy one user message with an exit code. You must carefully review and reason about the results. If there are any issues (e.g., command error, no output), you must raise them.
+- For scenarios requiring command information, you must wait for the command to execute and the user message to return before making decisions. Before executing commands, consider which platform to run them on.
+
+- If <End_Tool> appears in conversation history beyond three rounds, it means the message has been compressed.
+- When the user has no clear intention to operate on projects or execute commands, you must not perform any command execution.

@@ -1,21 +1,5 @@
 // chat.js — Chat flow, Agent loop, Tool processing, API calls
 // Depends on intro.js (loaded first) for all globals and utility functions
-    function wrapStreamingBlock(text) {
-        // 如果文本包含开标签但无对应闭标签，将开标签之后的内容折叠
-        return renderPluginBlocks(text);
-    }
-
-    function stripTags(text) {
-        return text
-            .replace(/<mem:[^>]+>[\s\S]*?<\/mem>/gi, '')
-            .replace(/<power>[\s\S]*?<\/power>/gi, '')
-            .replace(/<powershell>[\s\S]*?<\/powershell>/gi, '')
-            .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
-            .replace(/<shell>[\s\S]*?<\/shell>/gi, '')
-            .replace(/<mem-del:[^>]+>/gi, '')
-            .trim();
-    }
-
     function autoScroll() {
         if (isUserScrolledAway) return;
         requestAnimationFrame(function() {
@@ -29,23 +13,43 @@
     }
 
     async function processToolCalls(responseText) {
-        // Parse <power>...</power>, <powershell>...</powershell>, <cmd>...</cmd> and <shell>...</shell> tags
+        // First try to parse commands from <Plugin-cmd> blocks (wrapped = safe)
+        var pluginCmdRegex = /<Plugin-cmd>([\s\S]*?)<\/Plugin-cmd>/gi;
+        var pExecText = '';
+        var blockMatch;
+        while ((blockMatch = pluginCmdRegex.exec(responseText)) !== null) {
+            pExecText += blockMatch[1] + '\n';
+        }
+        var useSummary = !!pExecText.trim();
+        var effectiveText = useSummary ? pExecText : responseText;
+
+        // Parse <cwd> to change working directory
+        var cwdRegex = /<cwd>([\s\S]*?)<\/cwd>/gi;
+        var cwdMatch;
+        while ((cwdMatch = cwdRegex.exec(effectiveText)) !== null) {
+            var newDir = cwdMatch[1].trim();
+            if (newDir && window.CommandExecutionPlugin) {
+                window.CommandExecutionPlugin.workingDirectory = newDir;
+            }
+        }
+
+        // Parse command tags
         var commands = [];
         var powerRegex = /<power>([\s\S]*?)<\/power>/gi;
         var psRegex = /<powershell>([\s\S]*?)<\/powershell>/gi;
         var cmdRegex = /<cmd>([\s\S]*?)<\/cmd>/gi;
         var shellRegex = /<shell>([\s\S]*?)<\/shell>/gi;
         var match;
-        while ((match = powerRegex.exec(responseText)) !== null) {
+        while ((match = powerRegex.exec(effectiveText)) !== null) {
             commands.push({ idx: commands.length, shell: 'powershell', command: match[1].trim() });
         }
-        while ((match = psRegex.exec(responseText)) !== null) {
+        while ((match = psRegex.exec(effectiveText)) !== null) {
             commands.push({ idx: commands.length, shell: 'powershell', command: match[1].trim() });
         }
-        while ((match = cmdRegex.exec(responseText)) !== null) {
+        while ((match = cmdRegex.exec(effectiveText)) !== null) {
             commands.push({ idx: commands.length, shell: 'cmd', command: match[1].trim() });
         }
-        while ((match = shellRegex.exec(responseText)) !== null) {
+        while ((match = shellRegex.exec(effectiveText)) !== null) {
             commands.push({ idx: commands.length, shell: 'shell', command: match[1].trim() });
         }
         if (commands.length === 0) return false;
@@ -55,89 +59,75 @@
         }
 
         var dangerous = [/rm\s+-rf/i, /(?:^|[&|;])\s*format\s+[a-z]:/i, /del\s+\/f/i, /rd\s+\/s/i, /shutdown/i, /sudo\s+rm\s+-rf/i, />\s*\/dev\/sda/i, /dd\s+if=/i, /:\(\)\s*\{/i];
+        var summaryResults = [];
+        var preSummaryMsgs = [];
         for (var ci = 0; ci < commands.length; ci++) {
             var cmd = commands[ci];
-            // 如果已中断，跳过剩余命令
             if (currentAbortController && currentAbortController.signal.aborted) break;
             if (dangerous.some(function(p) { return p.test(cmd.command); })) {
-                var msg = { role: 'tool', content: _('dangerousBlocked') + cmd.command, images: [], _isExec: true };
-                chats[currentChat].push(msg);
+                var msg = { role: 'tool', content: _('dangerousBlocked') + cmd.command, images: [], _isExec: true, _execTitle: '危险命令' };
+                preSummaryMsgs.push(msg);
                 addMessage(msg.content, 'tool', [], null, msg);
                 continue;
             }
             if (commandConfirmEnabled && window.CommandExecutionPlugin) {
                 try {
                     if (!(await window.CommandExecutionPlugin.confirmCommand(cmd.shell, cmd.command))) {
-                        var msg = { role: 'tool', content: _('cmdCancelled') + cmd.shell + ' ' + cmd.command, images: [], _isExec: true };
-                        chats[currentChat].push(msg);
-                        addMessage(msg.content, 'tool', [], null, msg);
+                        var msg = { role: 'tool', content: _('cmdCancelled') + cmd.shell + ' ' + cmd.command, images: [], _isExec: true, _execTitle: '已取消' };
+                        preSummaryMsgs.push(msg);
+                        if (useSummary) addMessage(msg.content, 'tool', [], null, msg);
                         continue;
                     }
                 } catch (e) {
                     console.error('[命令确认] 确认弹窗失败，直接执行:', e);
                 }
             }
-            // 找到 AI 消息内对应该命令的 cmd plugin-block 并更新它
-            var matchedBid = null;
-            var cmdNorm = cmd.command.replace(/\s+/g, ' ').trim().toLowerCase();
-            for (var bid in pluginBlockTimers) {
-                var t = pluginBlockTimers[bid];
-                if (t && t.type === 'cmd') {
-                    var storedCmd = (t.content || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                    if (storedCmd === cmdNorm) { matchedBid = bid; break; }
-                }
-            }
-            var execMsg = { role: 'tool', content: '', images: [], _bid: matchedBid, _isExec: true };
-            chats[currentChat].push(execMsg);
             try {
                 var workDir = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir;
                 var abortSignal = currentAbortController ? currentAbortController.signal : undefined;
                 var res = await fetch('/api/plugin/CommandExecution/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shell: cmd.shell, command: cmd.command, timeout: 30000, workingDirectory: workDir, sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true, requestId: currentRequestId }), signal: abortSignal });
-                var sysMsg;
-                var resultTitle, resultBody;
                 if (res.ok) {
                     var d = await res.json();
-                    var rawOut = d.stdout || d.stderr || '';
-                    var out = rawOut.trim();
-                    resultBody = (rawOut ? (out || rawOut) : _('noOutput')) + '\n' + _('exitCode') + d.exitCode;
-                    resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
-                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle, _time: new Date().toISOString() };
+                    // 从后端同步工作目录
+                    if (d.workDir && window.CommandExecutionPlugin) {
+                        window.CommandExecutionPlugin.workingDirectory = d.workDir;
+                    }
+                    summaryResults.push({ cmd: cmd, exitCode: d.exitCode, stdout: d.stdout || "", stderr: d.stderr || "" });
                 } else {
                     var errText = await res.text();
-                    resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
-                    resultBody = errText;
-                    sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle, _time: new Date().toISOString() };
+                    summaryResults.push({ cmd: cmd, exitCode: -1, stdout: '', stderr: errText });
                 }
-                var idx = chats[currentChat].indexOf(execMsg);
-                if (idx !== -1) chats[currentChat][idx] = sysMsg;
-                var target = matchedBid ? document.getElementById(matchedBid) : null;
-                if (target) {
-                    updateCmdBlock(target, resultTitle, resultBody);
-                } else {
-                    var fallback = createCmdBlock(resultTitle, resultBody);
-                    chatAreaInner.appendChild(fallback);
-                    if (emptyHint) emptyHint.style.display = 'none';
-                }
-                chatArea.scrollTop = chatArea.scrollHeight;
             } catch (e) {
-                var resultBody = e.message;
-                var resultTitle = cmd.command.length > 50 ? cmd.command.substring(0, 47) + '...' : cmd.command;
-                var sysMsg = { role: 'tool', content: resultBody, images: [], _isExec: true, _execTitle: resultTitle };
-                var idx = chats[currentChat].indexOf(execMsg);
-                if (idx !== -1) chats[currentChat][idx] = sysMsg;
-                var target = matchedBid ? document.getElementById(matchedBid) : null;
-                if (target) {
-                    updateCmdBlock(target, resultTitle, resultBody);
-                } else {
-                    var fallback = createCmdBlock(resultTitle, resultBody);
-                    chatAreaInner.appendChild(fallback);
-                    if (emptyHint) emptyHint.style.display = 'none';
-                }
-                chatArea.scrollTop = chatArea.scrollHeight;
+                summaryResults.push({ cmd: cmd, exitCode: -1, stdout: '', stderr: e.message });
             }
         }
-        saveChatToBackend();
-        return commands.length > 0;
+
+        console.log('[processToolCalls] useSummary:', useSummary, 'preSummaryMsgs:', preSummaryMsgs.length, 'summaryResults:', summaryResults.length, 'commands found:', commands.length);
+
+        // Save pre-summary messages to chat history
+        if (preSummaryMsgs.length > 0) {
+            preSummaryMsgs.forEach(function(m) { chats[currentChat].push(m); });
+        }
+
+        if (summaryResults.length > 0) {
+            // 保存执行结果到全局队列，等气泡渲染完成后由 __injectCmdResults 注入（避免 bubble.replaceWith 丢失结果）
+            summaryResults.forEach(function(r) {
+                window.__pendingExecResults.push(r);
+                // 保存单条执行记录到历史
+                var rawOut = r.stdout || r.stderr || '';
+                var out = rawOut.trim();
+                var bodyContent = (rawOut ? (out || rawOut) : _('noOutput')) + '\n' + _('exitCode') + r.exitCode;
+                var title = r.cmd.shell + ' ' + (r.cmd.command.length > 50 ? r.cmd.command.substring(0, 47) + '...' : r.cmd.command);
+                var sysMsg = { role: 'tool', content: bodyContent, images: [], _isExec: true, _execTitle: title, _execCommand: r.cmd.command.trim(), _execStdout: r.stdout || '', _execStderr: r.stderr || '', _execExitCode: r.exitCode, _execShell: r.cmd.shell, _time: new Date().toISOString() };
+                chats[currentChat].push(sysMsg);
+            });
+            if (emptyHint) emptyHint.style.display = 'none';
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        await saveChatToBackend();
+        return summaryResults.length > 0 || preSummaryMsgs.length > 0;
+
     }
 
     async function processMemoryCalls(responseText) {
@@ -227,12 +217,9 @@
         if (memoryEnabled && pluginPrompts.Memory) {
             parts.push(pluginPrompts.Memory);
         }
-        if (askEnabled && pluginPrompts.Ask) {
-            parts.push(pluginPrompts.Ask);
-        }
         if (commandExecEnabled) {
             var wd = (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '';
-            parts.push('默认工作目录为 ' + wd + '，所有命令默认在此目录执行，记住在查看文件时不能虚构文件夹，最佳做法是使用查阅目录的命令');
+            parts.push('默认工作目录为' + wd + '，所有命令默认在此目录执行');
         }
         return parts.join('\n').trim();
     }
@@ -244,7 +231,7 @@
         for (var i = msgs.length - 1; i >= 0; i--) {
             if (msgs[i].role === 'user') {
                 userCount++;
-                if (userCount >= 3) {
+                if (userCount >= 5) {
                     boundaryIndex = i;
                     break;
                 }
@@ -292,6 +279,7 @@
             temperature: currentParams.temperature,
             top_p: currentParams.top_p,
             max_tokens: currentParams.max_tokens,
+            sandbox: typeof sandboxEnabled !== 'undefined' ? sandboxEnabled : true,
             workingDirectory: (window.CommandExecutionPlugin && window.CommandExecutionPlugin.workingDirectory) || defaultWorkDir || '',
         };
         if (currentProvider && currentProvider.startsWith('custom_')) {
@@ -309,7 +297,7 @@
         return { body: res.body, apiRequest: payload, requestId: requestId };
     }
 
-    async function callAPI(messages) {
+    async function callAPI(messages, extraOpts) {
         if (!currentModel) throw new Error(_('noModel'));
         console.log('[API] 发起请求, 消息数:', messages.length, '模型:', currentModel, '提供商:', currentProvider);
         var requestId = Date.now().toString(36) + Math.random().toString(36).substring(2);
@@ -324,6 +312,10 @@
             } catch (e) {}
         }
         Object.keys(currentParams).forEach(function(k) { if (currentParams[k] != null) payload[k] = currentParams[k]; });
+        // extraOpts 覆盖当前参数（用于保底机制等场景）
+        if (extraOpts) {
+            Object.keys(extraOpts).forEach(function(k) { if (extraOpts[k] != null) payload[k] = extraOpts[k]; });
+        }
         payload.stream = streamEnabled;
         payload.requestId = requestId;
         if (currentThinkMode !== 'fast') payload.deep_think = true;
@@ -395,41 +387,6 @@
             }
             chats[currentChat].push(userMsg);
             saveChatToBackend();
-
-            // 文件 & 图片卡片网格，显示在输出上方
-            var hasCards = allFiles.length > 0;
-            var grid = null;
-            if (hasCards) {
-                grid = document.createElement('div');
-                grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:6px;';
-                textFiles.forEach(function(f) {
-                    var card = document.createElement('div');
-                    card.style.cssText = 'display:inline-flex;align-items:center;gap:12px;padding:14px 18px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;min-width:180px;cursor:pointer;flex-shrink:0;';
-                    card.onclick = function() { openFileViewer(f.fileName, f.content); };
-                    card.innerHTML =
-                        '<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#666\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">' +
-                            '<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/>' +
-                            '<polyline points=\"14 2 14 8 20 8\"/>' +
-                            '<line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/>' +
-                            '<line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>' +
-                        '</svg>' +
-                        '<span style=\"font-size:13px;color:#333;line-height:1.3;word-break:break-all;\">' + escapeHtml(f.fileName) + '</span>';
-                    grid.appendChild(card);
-                });
-                imageFiles.forEach(function(f) {
-                    var thumb = document.createElement('div');
-                    thumb.style.cssText = 'position:relative;display:inline-block;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;cursor:pointer;flex-shrink:0;max-width:200px;';
-                    thumb.onclick = function() { openFileViewer(f.fileName, f.content); };
-                    thumb.innerHTML = '<img src="' + f.content + '" alt="' + escapeHtml(f.fileName) + '" style="max-width:200px;max-height:150px;display:block;">';
-                    grid.appendChild(thumb);
-                });
-                videoFiles.forEach(function(f) {
-                    var vwrap = document.createElement('div');
-                    vwrap.style.cssText = 'border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;flex-shrink:0;max-width:280px;';
-                    vwrap.innerHTML = '<video controls preload="metadata" style="width:100%;display:block;max-height:200px;background:#000;" src="' + f.content + '"></video>';
-                    grid.appendChild(vwrap);
-                });
-            }
 
             // 显示用户气泡（文字 / 图片 / 视频 / 文件的文件卡片通过 userMsg._files 渲染）
             if (userText) {
@@ -532,7 +489,6 @@
             var streamRequestBody = null;
             var apiRequest = null;
             var maxAgentIter = agentEnabled ? agentMaxIterations : 1;
-            var agentBubbles = [];
 
             // 后端 Agent 模式（持久化、可刷新恢复）
             if (agentEnabled && maxAgentIter > 1) {
@@ -587,13 +543,12 @@
                 var statusLines = [];
                 statusLines.push('- ' + _('commandExec') + ': ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? _('enabled') : _('disabled')));
                 statusLines.push('- ' + (_('sandbox') || 'Sandbox') + ': ' + (typeof sandboxEnabled !== 'undefined' && sandboxEnabled ? _('enabled') : _('disabled')));
-                statusLines.push('- ' + (_('modelAsk') || 'Model Ask') + ': ' + (typeof askEnabled !== 'undefined' && askEnabled ? _('enabled') : _('disabled')));
                 statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? _('enabled') : _('disabled')));
                 var statusText = '[' + (_('pluginStatus') || '当前插件状态') + ']\n' + statusLines.join('\n');
                 var ctxStr = maxContextTokens >= 1000000 ? (maxContextTokens / 1000000).toFixed(0) + 'M' : (maxContextTokens / 1000).toFixed(0) + 'K';
                 if (!pureMode) {
                     var baseParts = [statusText];
-                    if (systemVersion) baseParts.push('[用户使用的系统版本: ' + systemVersion + ']');
+                    if (systemVersion && commandExecEnabled) baseParts.push('[用户使用的系统版本: ' + systemVersion + ']');
                     baseParts.push('目前最大上下文 ' + ctxStr + ' token');
                     if (baseSystemPrompt) baseParts.push(baseSystemPrompt);
                     if (currentParams.systemPrompt) baseParts.push(currentParams.systemPrompt);
@@ -602,17 +557,45 @@
                     iterMsgs.unshift({ role: 'system', content: currentParams.systemPrompt, images: [] });
                 }
                 var agentCall = await callAgentAPI(iterMsgs);
-                bubble.innerHTML = '';
-                var agentReasoningDiv = document.createElement('div');
-                var agentContentDiv = document.createElement('div');
-                agentContentDiv.className = 'markdown-body';
-                bubble.appendChild(agentReasoningDiv);
-                bubble.appendChild(agentContentDiv);
                 var decoder = new TextDecoder();
                 var reader = agentCall.body.getReader();
                 var buf = '';
                 var totalContent = '';
                 var agentUsage = null;
+                // 收集工具结果，wait assistant保存后再插入，确保顺序正确
+                var pendingToolMsgs = [];
+                var pendingToolResults = [];
+                // 当前迭代的独立内容跟踪
+                var iterContent = '';
+                var iterReasoning = '';
+                var currentBubble = bubble;
+                var currentReasoningDiv = null;
+                var currentContentDiv = null;
+
+                function setupIterBubble(bubbleEl) {
+                    bubbleEl.innerHTML = '';
+                    currentReasoningDiv = document.createElement('div');
+                    currentContentDiv = document.createElement('div');
+                    currentContentDiv.className = 'markdown-body';
+                    bubbleEl.appendChild(currentReasoningDiv);
+                    bubbleEl.appendChild(currentContentDiv);
+                }
+                setupIterBubble(currentBubble);
+
+                function saveCurrentIteration() {
+                    if (!iterContent && !iterReasoning) return;
+                    if (currentReasoningDiv && currentReasoningDiv._fullReasoning) {
+                        currentReasoningDiv.innerHTML = createThinkBlock(currentReasoningDiv._fullReasoning, { isThinking: false });
+                    }
+                    var iterMsg = {
+                        role: 'assistant',
+                        content: iterContent,
+                        reasoning: iterReasoning || null
+                    };
+                    chats[currentChat].push(iterMsg);
+                    totalContent += iterContent;
+                }
+
                 while (true) {
                     var r = await reader.read();
                     if (r.done) break;
@@ -626,25 +609,82 @@
                         try {
                             var evt = JSON.parse(d2);
                             if (evt.type === 'content') {
-                                totalContent += evt.text;
-                                agentContentDiv.innerHTML = _renderAIContent(totalContent) || '...';
-                                updatePluginTimers(); restoreExpandedBlocks(); autoScroll();
+                                iterContent += evt.text;
+                                if (currentContentDiv) {
+                                    currentContentDiv.innerHTML = _renderAIContent(iterContent) || '...';
+                                    updatePluginTimers(); restoreExpandedBlocks();
+                                }
+                                autoScroll();
                             } else if (evt.type === 'reasoning') {
-                                var rt = (agentReasoningDiv._fullReasoning || '') + evt.text;
-                                agentReasoningDiv._fullReasoning = rt;
-                                agentReasoningDiv.innerHTML = createThinkBlock(rt, { isThinking: true });
+                                iterReasoning += evt.text;
+                                if (currentReasoningDiv) {
+                                    currentReasoningDiv._fullReasoning = iterReasoning;
+                                    currentReasoningDiv.innerHTML = createThinkBlock(iterReasoning, { isThinking: true });
+                                }
                                 autoScroll();
                             } else if (evt.type === 'usage') {
                                 agentUsage = evt.usage;
+                            } else if (evt.type === 'iter_start' && evt.iteration > 0) {
+                                // 新迭代开始 → 保存上一轮内容，创建新气泡
+                                saveCurrentIteration();
+                                // 插入上一轮的暂存工具结果，保持 user→assistant→tool 顺序
+                                pendingToolMsgs.forEach(function(m) { chats[currentChat].push(m); });
+                                // 将上一轮的单个命令块替换为时间线块（注入到已有 think-block 中）
+                                if (pendingToolResults.length > 0) {
+                                    chatAreaInner.querySelectorAll('.plugin-block.cmd-block').forEach(function(el) { el.remove(); });
+                                    pendingToolResults.forEach(function(r) {
+                                        var cmdKey = r.cmd.command.trim();
+                                        var sel = '.cmd-timeline-block:not(.has-result)[data-cmd="' + escapeHtml(cmdKey) + '"]';
+                                        var block = null;
+                                        try { block = chatAreaInner.querySelector(sel); } catch(e) { console.warn('[iter_start] querySelector err:', e); }
+                                        if (!block) {
+                                            var allBlocks = chatAreaInner.querySelectorAll('.cmd-timeline-block:not(.has-result)');
+                                            console.log('[iter_start] data-cmd匹配失败, cmdKey="' + cmdKey + '", 找到', allBlocks.length, '个未注入块');
+                                            allBlocks.forEach(function(b,i) { console.log('  #'+i+' data-cmd="'+b.getAttribute('data-cmd')+'" cls="'+b.className+'"'); });
+                                            if (allBlocks.length > 0) block = allBlocks[0];
+                                        } else {
+                                            console.log('[iter_start] 找到精确匹配 data-cmd="' + escapeHtml(cmdKey) + '"');
+                                        }
+                                        if (block) {
+                                            block.classList.add('has-result');
+                                            var contentEl = block.querySelector('.think-content');
+                                            var statusEl = block.querySelector('.think-status');
+                                            if (contentEl) {
+                                                var rawOut = r.stdout || r.stderr || '';
+                                                var bodyStr = rawOut.trim() || _('noOutput');
+                                                var exitClass = r.exitCode === 0 ? 'cs-exit-ok' : 'cs-exit-fail';
+                                                var exitIcon = r.exitCode === 0 ? '✓' : '✗';
+                                                contentEl.innerHTML += '<div class="cs-result-sep"></div><div class="cs-result-block">' + escapeHtml(bodyStr) + '</div><span class="' + exitClass + '">' + exitIcon + ' ' + _('exitCode') + r.exitCode + '</span>';
+                                            }
+                                            if (statusEl) {
+                                                var exitIcon2 = r.exitCode === 0 ? '✓' : '✗';
+                                                statusEl.textContent = exitIcon2;
+                                                statusEl.style.display = '';
+                                                statusEl.style.color = r.exitCode === 0 ? '#4ade80' : '#e74c3c';
+                                            }
+                                        } else {
+                                            console.warn('[iter_start] 找不到任何未注入 think-block, 创建独立结果块');
+                                            chatAreaInner.appendChild(createCmdResultTimeline(r));
+                                        }
+                                    });
+                                    chatArea.scrollTop = chatArea.scrollHeight;
+                                }
+                                pendingToolMsgs = [];
+                                pendingToolResults = [];
+                                iterContent = '';
+                                iterReasoning = '';
+                                currentBubble = addMessage('...', 'ai', [], null, null);
+                                setupIterBubble(currentBubble);
+                                saveChatToBackend();
                             } else if (evt.type === 'tool_start') {
-                                var tb = createCmdBlock(evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd, '执行中...');
-                                chatAreaInner.appendChild(tb);
-                                if (emptyHint) emptyHint.style.display = 'none';
-                                chatArea.scrollTop = chatArea.scrollHeight;
+                                // tool_start: 不再创建旧样式命令块，流式渲染已有 think-block
                             } else if (evt.type === 'tool_result') {
                                 var rb = (evt.stdout || '') + (evt.stderr ? '\n' + evt.stderr : '') + '\n' + _('exitCode') + evt.exitCode;
-                                var lastBlock = chatAreaInner.querySelector('.plugin-block.cmd-block:last-child');
-                                if (lastBlock) updateCmdBlock(lastBlock, evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd, rb);
+                                // 暂存工具结果，等 assistant 消息后再一起写入历史，保证 user→assistant→tool 顺序
+                                var toolTitle = evt.cmd.length > 50 ? evt.cmd.substring(0, 47) + '...' : evt.cmd;
+                                var toolMsg = { role: 'tool', content: rb, images: [], _isExec: true, _execTitle: toolTitle, _execCommand: evt.cmd.trim(), _execStdout: evt.stdout || '', _execStderr: evt.stderr || '', _execExitCode: evt.exitCode, _execShell: evt.shell || 'shell' };
+                                pendingToolMsgs.push(toolMsg);
+                                pendingToolResults.push({ cmd: { shell: evt.shell || 'shell', command: evt.cmd }, exitCode: evt.exitCode, stdout: evt.stdout || '', stderr: evt.stderr || '' });
                             } else if (evt.type === 'error') {
                                 console.error('[Agent] 后端错误:', evt.message);
                             }
@@ -652,15 +692,60 @@
                     }
                     autoScroll();
                 }
-                fullContent = totalContent;
-                var agentAssistantMsg = { role: 'assistant', content: fullContent, reasoning: agentReasoningDiv._fullReasoning || null, apiRequest: agentCall.apiRequest || null, usage: agentUsage || null };
-                chats[currentChat].push(agentAssistantMsg);
-                saveChatToBackend();
-                if (agentReasoningDiv._fullReasoning) {
-                    agentReasoningDiv.innerHTML = createThinkBlock(agentReasoningDiv._fullReasoning, { isThinking: false });
+
+                // 结束：终结最后一个迭代的推理展示（不重复保存，由下方 agentAssistantMsg 统一保存）
+                if (currentReasoningDiv && currentReasoningDiv._fullReasoning) {
+                    currentReasoningDiv.innerHTML = createThinkBlock(currentReasoningDiv._fullReasoning, { isThinking: false });
                 }
-                var newBubble = createMessageBubble(fullContent, 'ai', [], agentReasoningDiv._fullReasoning || null, agentAssistantMsg, '');
-                bubble.replaceWith(newBubble);
+                fullContent = totalContent + iterContent;
+                var agentAssistantMsg = {
+                    role: 'assistant',
+                    content: iterContent,
+                    reasoning: iterReasoning || null,
+                    apiRequest: agentCall.apiRequest || null,
+                    usage: agentUsage || null
+                };
+                chats[currentChat].push(agentAssistantMsg);
+                // 将暂存的工具结果插入到 assistant 之后，保证 user→assistant→tool 顺序
+                pendingToolMsgs.forEach(function(m) { chats[currentChat].push(m); });
+                // 将最后的单个命令块替换为独立时间线块
+                // 移除旧样式的 plugin-block（执行中的命令块）
+                chatAreaInner.querySelectorAll('.plugin-block.cmd-block').forEach(function(el) { el.remove(); });
+                saveChatToBackend();
+
+                // 将最后一个气泡替换为完整格式的气泡
+                var finalBubble = createMessageBubble(iterContent, 'ai', [], iterReasoning || null, agentAssistantMsg, '');
+                if (currentBubble && currentBubble.parentNode) {
+                    currentBubble.replaceWith(finalBubble);
+                }
+
+                // 处理最后一轮可能残留的结果（单轮场景下 iter_start 不会触发）
+                if (pendingToolResults.length > 0) {
+                    pendingToolResults.forEach(function(r) {
+                        var cmdKey = r.cmd.command.trim();
+                        var block = chatAreaInner.querySelector('.cmd-timeline-block:not(.has-result)[data-cmd="' + escapeHtml(cmdKey) + '"]')
+                            || chatAreaInner.querySelector('.cmd-timeline-block:not(.has-result)');
+                        if (block) {
+                            block.classList.add('has-result');
+                            var contentEl = block.querySelector('.think-content');
+                            var statusEl = block.querySelector('.think-status');
+                            if (contentEl) {
+                                var rawOut = r.stdout || r.stderr || '';
+                                var bodyStr = rawOut.trim() || _('noOutput');
+                                var exitClass = r.exitCode === 0 ? 'cs-exit-ok' : 'cs-exit-fail';
+                                var exitIcon = r.exitCode === 0 ? '✓' : '✗';
+                                contentEl.innerHTML += '<div class="cs-result-sep"></div><div class="cs-result-block">' + escapeHtml(bodyStr) + '</div><span class="' + exitClass + '">' + exitIcon + ' ' + _('exitCode') + r.exitCode + '</span>';
+                            }
+                            if (statusEl) {
+                                statusEl.textContent = r.exitCode === 0 ? '✓' : '✗';
+                                statusEl.style.display = '';
+                                statusEl.style.color = r.exitCode === 0 ? '#4ade80' : '#e74c3c';
+                            }
+                        }
+                    });
+                    chatArea.scrollTop = chatArea.scrollHeight;
+                }
+
                 if (typeof askAutoShow !== 'undefined' && askAutoShow) {
                     if (_pendingAsk) { showAskPopup(); }
                     else {
@@ -760,14 +845,13 @@
                 statusLines.push('- ' + _('commandExec') + ': ' + (typeof commandExecEnabled !== 'undefined' && commandExecEnabled ? _('enabled') : _('disabled')));
                 statusLines.push('- ' + _('memory') + ': ' + (typeof memoryEnabled !== 'undefined' && memoryEnabled ? _('enabled') : _('disabled')));
                 statusLines.push('- ' + (_('sandbox') || 'Sandbox') + ': ' + (typeof sandboxEnabled !== 'undefined' && sandboxEnabled ? _('enabled') : _('disabled')));
-                statusLines.push('- ' + (_('modelAsk') || 'Model Ask') + ': ' + (typeof askEnabled !== 'undefined' && askEnabled ? _('enabled') : _('disabled')));
                 statusLines.push('- Agent: ' + (typeof agentEnabled !== 'undefined' && agentEnabled ? _('enabled') : _('disabled')));
                 statusLines.push('- ' + (_('cothink') || 'Chain of Thought') + ': ' + (typeof cothinkEnabled !== 'undefined' && cothinkEnabled ? _('enabled') : _('disabled')));
                 var statusText = '[' + (_('pluginStatus') || '当前插件状态') + ']\n' + statusLines.join('\n');
                 var ctxStr = maxContextTokens >= 1000000 ? (maxContextTokens / 1000000).toFixed(0) + 'M' : (maxContextTokens / 1000).toFixed(0) + 'K';
                 if (!pureMode) {
                     var baseParts = [statusText];
-                    if (systemVersion) baseParts.push('[用户使用的系统版本: ' + systemVersion + ']');
+                    if (systemVersion && commandExecEnabled) baseParts.push('[用户使用的系统版本: ' + systemVersion + ']');
                     baseParts.push('目前最大上下文 ' + ctxStr + ' token');
                     if (baseSystemPrompt) baseParts.push(baseSystemPrompt);
                     if (currentParams.systemPrompt) baseParts.push(currentParams.systemPrompt);
@@ -788,6 +872,10 @@
                 apiRequest = callResult.apiRequest || apiRequest;
                 fullContent = '';
                 fullReasoning = '';
+                var streamError = null;
+                var lastStopReason = '';
+                // 每个迭代独立的请求数据，避免共享变量被后续迭代覆盖
+                var iterRequestData = null;
 
                 bubble.innerHTML = '';
                 var reasoningDiv = document.createElement('div');
@@ -799,14 +887,19 @@
                 if (callResult.json) {
                     // Non-streaming response
                     var nr = callResult.json;
+                    if (nr.type === 'error') {
+                        streamError = nr.content;
+                    } else {
                     fullContent = nr.choices?.[0]?.message?.content || '';
                     fullReasoning = nr.choices?.[0]?.message?.reasoning_content || '';
                     streamUsage = nr.usage || null;
                     streamRequestBody = nr.apiRequest || nr.requestBody || null;
+                    iterRequestData = streamRequestBody || apiRequest;
                     if (fullReasoning) reasoningDiv.innerHTML = createThinkBlock(fullReasoning, { isThinking: false });
                     if (fullContent) contentDiv.innerHTML = _renderAIContent(fullContent) || '...';
                     updatePluginTimers();
                     restoreExpandedBlocks();
+                    }
                 } else {
                 var decoder = new TextDecoder();
                 var reader = callResult.body.getReader();
@@ -825,9 +918,11 @@
                             if (data === '[DONE]') continue;
                             try {
                                 var json = JSON.parse(data);
-                                if (json.type === 'request_body' && json.requestBody) { streamRequestBody = json.requestBody; continue; }
+                                if (json.type === 'request_body' && json.requestBody) { streamRequestBody = json.requestBody; iterRequestData = streamRequestBody; continue; }
                                 if (json.usage && !json.choices) { streamUsage = json.usage; continue; }
                                 if (json.usage) streamUsage = json.usage;
+                                if (json.type === 'stop_reason') { lastStopReason = json.stop_reason; continue; }
+                                if (json.type === 'error') { streamError = json.content; continue; }
                                 var delta = json.choices?.[0]?.delta;
                                 if (delta) {
                                     if (delta.reasoning_content) {
@@ -864,6 +959,20 @@
                 }
                 }
 
+                // 提供商 JSON 错误：以红字可删除的模型消息返回
+                if (streamError) {
+                    fullContent = streamError;
+                    fullReasoning = '';
+                }
+
+                // 提示 max_tokens 截断
+                if (lastStopReason === 'max_tokens') {
+                    var warnDiv = document.createElement('div');
+                    warnDiv.style.cssText = 'font-size:12px;color:#b8860b;margin-top:4px;padding:6px 12px;background:#fffbe6;border-radius:4px;border:0.5px solid #f0d98c;';
+                    warnDiv.textContent = '⚠ ' + (_('maxTokensWarning') || '模型输出已达到最大长度限制(max_tokens)，可能需要调整参数或开启新对话继续。');
+                    contentDiv.after(warnDiv);
+                }
+
                 // 保底机制: 如果模型仅在深度思考输出内容，正式输出为空，则重新调用一次
                 if (!fullContent?.trim() && fullReasoning?.trim()) {
                     console.log('[保底] 模型仅输出深度思考，重新调用...');
@@ -877,7 +986,7 @@
                     var fbPrompt = buildToolPrompt();
                     if (fbPrompt) fbMsgs.unshift({ role: 'system', content: fbPrompt, images: [] });
                     try {
-                        var fbRes = await callAPI(fbMsgs, { model: currentModel, messages: fbMsgs, stream: false, max_tokens: currentParams.max_tokens || 4096, temperature: currentParams.temperature || 0.6 });
+                        var fbRes = await callAPI(fbMsgs, { model: currentModel, messages: fbMsgs, stream: false, max_tokens: currentParams.max_tokens, temperature: currentParams.temperature || 0.6 });
                         if (fbRes.json) {
                             var fbC = fbRes.json.choices?.[0]?.message?.content || '';
                             var fbR = fbRes.json.choices?.[0]?.message?.reasoning_content || '';
@@ -887,9 +996,12 @@
                 }
 
                 // Save this iteration to chat (before agent check so non-agent mode also saves)
-                var iterAssistantMsg = { role: 'assistant', content: fullContent, reasoning: fullReasoning || null, usage: streamUsage || null, apiRequest: streamRequestBody || apiRequest || null };
+                var iterAssistantMsg = { role: 'assistant', content: fullContent, reasoning: fullReasoning || null, usage: streamUsage || null, apiRequest: iterRequestData, _isError: !!streamError };
                 chats[currentChat].push(iterAssistantMsg);
-                saveChatToBackend();
+                await saveChatToBackend();
+
+                // 提供商错误时跳过工具处理
+                if (streamError) break;
 
                 // Process tool calls from this iteration
                 var hadCommand = false;
@@ -901,11 +1013,11 @@
                     try { hadMemoryOp = await processMemoryCalls(fullContent); } catch (e) { console.error('[记忆调用错误]', e); }
                 }
 
-                if (!agentEnabled) break;
+                if (!agentEnabled && !hadCommand && !hadMemoryOp) break;
 
                 // Auto-continue if any command or memory operation was executed
                 var shouldContinue = hadCommand || hadMemoryOp;
-                if (agentIter >= maxAgentIter - 1) shouldContinue = false;
+                if (agentIter >= maxAgentIter - 1 && !hadCommand && !hadMemoryOp) shouldContinue = false;
                 console.log('[Agent] 迭代 ' + (agentIter + 1) + ' 完成, 长度: ' + fullContent.length + ', 有命令=' + hadCommand + ', 有记忆=' + hadMemoryOp + ', 继续=' + shouldContinue);
 
                 if (!shouldContinue) break;
@@ -914,6 +1026,8 @@
                 var finMsg = iterAssistantMsg;
                 var finBubble = createMessageBubble(fullContent, 'ai', [], fullReasoning, finMsg, '');
                 bubble.replaceWith(finBubble);
+                // 将命令执行结果注入到新的气泡中（在 bubble.replaceWith 之后执行，防止丢失）
+                if (typeof window.__injectCmdResults === 'function') window.__injectCmdResults();
 
                 // Start fresh bubble for next iteration
                 bubble = addMessage('...', 'ai', [], null, null);
@@ -938,14 +1052,18 @@
             iterAssistantMsg.thinkElapsed = thinkElapsed || null;
             var newBubble = createMessageBubble(fullContent, 'ai', [], fullReasoning, iterAssistantMsg, '');
             bubble.replaceWith(newBubble);
+            if (typeof window.__injectCmdResults === 'function') window.__injectCmdResults();
             updateHistoryTitle();
             saveChatToBackend();
             if (typeof showAskPopup === 'function' && _pendingAsk && typeof askAutoShow !== 'undefined' && askAutoShow) showAskPopup();
         } catch (e) {
-            if (e && (e.name === 'AbortError' || e.code === 'ERR_CANCELED')) {
+            // 只要有部分内容（思考或输出），无论错误类型都保存，防止 TypeError 导致内容丢失
+            if (fullContent || fullReasoning) {
                 var md = bubble.querySelector('.markdown-body') || bubble;
                 md.innerHTML = renderMarkdown(renderPluginBlocks(fullContent));
                 updatePluginTimers();
+                // 异常路径：气泡内容已更新，注入等待中的执行结果
+                if (typeof window.__injectCmdResults === 'function') window.__injectCmdResults();
                 var thinkElapsed2 = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : 0;
                 if (thinkStartTime) {
                     console.log('[深度思考] 深度思考被中断, 耗时:', thinkElapsed2, '秒');
@@ -965,6 +1083,8 @@
                 chats[currentChat].push(assistantMsg);
                 updateHistoryTitle();
                 saveChatToBackend();
+            } else if (e && (e.name === 'AbortError' || e.code === 'ERR_CANCELED')) {
+                // 用户主动停止，但还没有任何输出，什么都不用做
             } else {
                 bubble.innerHTML = '';
                 var errDiv = document.createElement('div');

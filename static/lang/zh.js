@@ -67,6 +67,7 @@ window.__I18N_ZH__={
   "memDeleted": "[mem] 已删除记忆 [",
   "exitCode": "退出码: ",
   "noOutput": "(无输出)",
+  "execResults": "命令执行结果",
   "provider": "提供商",
   "model": "模型",
   "thinkModeLabel": "思考模式: ",
@@ -195,7 +196,6 @@ window.__I18N_ZH__={
   "hiddenText": "已隐藏",
   "compressOldExec": "压缩旧执行",
   "usage": "使用统计",
-  "collapsePluginOutput": "折叠插件输出",
   "includeReasoning": "上下文深度思考",
   "lastOutput": "上次输出",
   "estimated": "估算",
@@ -224,7 +224,6 @@ window.__I18N_ZH__={
   "close": "关闭",
   "sandbox": "安全沙箱",
   "cothink": "思维链注入",
-  "modelAsk": "模型提问",
   "autoAskPopup": "自动弹出提问",
   "streamOutput": "流式输出",
   "agentMaxIter": "Agent最大迭代",
@@ -237,6 +236,8 @@ window.__I18N_ZH__={
   "runtime": "运行时",
   "drawerWidth": "侧边栏宽度",
   "drawerPosition": "侧边栏位置",
+  "uiScale": "界面缩放",
   "right": "右侧",
-  "left": "左侧"
+  "left": "左侧",
+  "maxTokensWarning": "模型输出已达到最大长度限制(max_tokens)，输出被截断。如需完整回复，请在设置中增大 max_tokens 或开启新对话。"
 };

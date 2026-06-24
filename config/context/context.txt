@@ -14,6 +14,8 @@ siliconflow/deepseek-v3.1-terminus[164k]
 siliconflow/deepseek-v3-0324[164k]
 siliconflow/deepseek-r1-0528[164k]
 
+step-3.7-flash[1m]
+
 MiniMax-M3[1m]
 MiniMax-M2.7-highspeed[200k]
 MiniMax-M2.7[200k]

@@ -1,6 +1,6 @@
 {
   "name": "fold.ai",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Fold.AI",
   "main": "bin/server.js",
   "bin": {

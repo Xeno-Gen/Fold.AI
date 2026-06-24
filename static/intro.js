@@ -47,7 +47,7 @@ window.showToast = function(msg) {
     var isChatActive = false, deepThinkEnabled = false, currentThinkMode = 'fast', cothinkEnabled = true;
     var chatBranches = {};
     var cachedThinkPrompt = '';
-    var commandExecEnabled = false, sandboxEnabled = true, commandConfirmEnabled = true, compressOldExecutions = true, collapsePluginOutput = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true, askEnabled = true, askAutoShow = true;
+    var commandExecEnabled = false, sandboxEnabled = true, commandConfirmEnabled = true, compressOldExecutions = true, memoryEnabled = true, agentEnabled = false, agentMaxIterations = 10, currentTheme = 'system', streamEnabled = true, askEnabled = true, askAutoShow = true;
     var cachedMemories = [];
     var chats = [], chatTitles = [], chatTokens = [], currentChat = -1;
     var activeFiles = { initial: [], chat: [] };
@@ -63,6 +63,7 @@ window.showToast = function(msg) {
     var streamAnimation = 'none';
     var includeReasoning = true;
     var chatFontSize = 15;
+    var uiScale = 100;
     var drawerWidth = '33%';
     var drawerPosition = 'right';
     var lastScrollTop = 0;
@@ -123,7 +124,6 @@ window.showToast = function(msg) {
                 agentEnabled = s.agentEnabled || false;
                 agentMaxIterations = s.agentMaxIterations || 10;
                 compressOldExecutions = s.compressOldExecutions !== undefined ? s.compressOldExecutions : true;
-                collapsePluginOutput = s.collapsePluginOutput !== undefined ? s.collapsePluginOutput : true;
                 currentThinkMode = s.thinkMode === 'direct' ? 'fast' : (s.thinkMode || 'fast');
                 deepThinkEnabled = s.deepThink || false;
                 if (s.autoCollapseThink !== undefined) autoCollapseThink = s.autoCollapseThink;
@@ -135,6 +135,7 @@ window.showToast = function(msg) {
                 if (s.askEnabled !== undefined) askEnabled = s.askEnabled;
                 if (s.askAutoShow !== undefined) askAutoShow = s.askAutoShow;
                 if (s.sandboxEnabled !== undefined) sandboxEnabled = s.sandboxEnabled;
+                if (s.uiScale !== undefined) uiScale = s.uiScale;
                 if (s.usedAsks) _usedAsks = s.usedAsks;
                 if (s.maxContextTokens !== undefined) maxContextTokens = s.maxContextTokens;
                 if (s.drawerWidth) { drawerWidth = s.drawerWidth; document.documentElement.style.setProperty('--drawer-width', drawerWidth); }
@@ -154,9 +155,22 @@ window.showToast = function(msg) {
 
     function saveSettingsToLocal() {
         try {
-            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, sandboxEnabled: sandboxEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, collapsePluginOutput: collapsePluginOutput, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled, askAutoShow: askAutoShow, usedAsks: _usedAsks, drawerWidth: drawerWidth, drawerPosition: drawerPosition }));
+            localStorage.setItem('fold_ai_settings', JSON.stringify({ theme: currentTheme, commandConfirm: commandConfirmEnabled, commandExecEnabled: commandExecEnabled, sandboxEnabled: sandboxEnabled, memoryEnabled: memoryEnabled, agentEnabled: agentEnabled, agentMaxIterations: agentMaxIterations, thinkMode: currentThinkMode, deepThink: deepThinkEnabled, autoCollapseThink: autoCollapseThink, compressOldExecutions: compressOldExecutions, streamEnabled: streamEnabled, cothinkEnabled: cothinkEnabled, includeReasoning: includeReasoning, maxContextTokens: maxContextTokens, thinkCollapseDuring: thinkCollapseDuring, streamAnimation: streamAnimation, askEnabled: askEnabled, askAutoShow: askAutoShow, usedAsks: _usedAsks, drawerWidth: drawerWidth, drawerPosition: drawerPosition, uiScale: uiScale }));
         } catch (e) {}
     }
+    function applyUiScale(scale) {
+        scale = scale || uiScale || 100;
+        document.documentElement.style.setProperty('--ui-scale', scale);
+        var isMobile = window.innerWidth <= 768;
+        if (!isMobile) {
+            document.documentElement.style.setProperty('--input-width', (50 * scale / 100) + 'vw');
+            document.documentElement.style.setProperty('--input-min-width', Math.round(480 * scale / 100) + 'px');
+        } else {
+            document.documentElement.style.removeProperty('--input-width');
+            document.documentElement.style.removeProperty('--input-min-width');
+        }
+    }
+    window.addEventListener('resize', function() { applyUiScale(uiScale); });
     function saveBranches() {
         try { localStorage.setItem('fold_chat_branches', JSON.stringify(chatBranches)); } catch (e) {}
     }
@@ -523,6 +537,12 @@ async function openFileInBrowser(filePath) {
             '<button class="think-mode-option' + (!chatFontSize || chatFontSize === 15 ? ' active' : '') + '" data-size="15">15</button>' +
             '<button class="think-mode-option' + (chatFontSize === 17 ? ' active' : '') + '" data-size="17">17</button>' +
             '<button class="think-mode-option' + (chatFontSize === 19 ? ' active' : '') + '" data-size="19">19</button></div></div>' +
+            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="3" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="21" cy="12" r="1.5"/></svg>' + (_('uiScale') || '界面缩放') + '</span><div class="think-mode-selector" id="settingsUiScale" style="display:inline-flex;">' +
+            '<button class="think-mode-option' + (uiScale === 75 ? ' active' : '') + '" data-scale="75">75%</button>' +
+            '<button class="think-mode-option' + (!uiScale || uiScale === 100 ? ' active' : '') + '" data-scale="100">100%</button>' +
+            '<button class="think-mode-option' + (uiScale === 125 ? ' active' : '') + '" data-scale="125">125%</button>' +
+            '<button class="think-mode-option' + (uiScale === 150 ? ' active' : '') + '" data-scale="150">150%</button>' +
+            '<button class="think-mode-option' + (uiScale === 200 ? ' active' : '') + '" data-scale="200">200%</button></div></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M15 3v18"/></svg>' + (_('drawerWidth') || '侧边栏宽度') + '</span><div class="think-mode-selector" id="settingsDrawerWidth" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (drawerWidth === '25%' ? ' active' : '') + '" data-width="25%">25%</button>' +
             '<button class="think-mode-option' + (!drawerWidth || drawerWidth === '33%' ? ' active' : '') + '" data-width="33%">33%</button>' +
@@ -570,6 +590,16 @@ async function openFileInBrowser(filePath) {
                 document.documentElement.style.setProperty('--chat-font-size', chatFontSize + 'px');
                 try { localStorage.setItem('fold_chat_fontsize', chatFontSize); } catch (e) {}
                 settingsPanelContent.querySelectorAll('#settingsFontSizeSelector .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+            };
+        });
+        // 界面缩放
+        var uiScaleEl = document.getElementById('settingsUiScale');
+        if (uiScaleEl) uiScaleEl.querySelectorAll('.think-mode-option').forEach(function(o) {
+            o.onclick = function() {
+                uiScale = parseInt(this.dataset.scale);
+                applyUiScale(uiScale);
+                uiScaleEl.querySelectorAll('.think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
+                saveSettingsToLocal();
             };
         });
         // 侧边栏宽度
@@ -639,12 +669,7 @@ async function openFileInBrowser(filePath) {
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg>' + (_('includeReasoning') || '上下文并入深度思考') + '</span><div class="think-mode-selector" id="settingsIncludeReasoningToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (includeReasoning ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
             '<button class="think-mode-option' + (!includeReasoning ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + (_('modelAsk') || '模型提问') + '</span><div class="think-mode-selector" id="settingsAskToggle" style="display:inline-flex;">' +
-            '<button class="think-mode-option' + (askEnabled ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!askEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg>' + (_('autoAskPopup') || '自动弹出提问') + '</span><div class="think-mode-selector" id="settingsAskAutoToggle" style="display:inline-flex;">' +
-            '<button class="think-mode-option' + (askAutoShow ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!askAutoShow ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
+            '</div>';
         settingsPanelContent.querySelectorAll('#settingsStreamToggle .think-mode-option').forEach(function(o) {
             o.onclick = function() {
                 streamEnabled = o.dataset.value === 'true';
@@ -659,20 +684,6 @@ async function openFileInBrowser(filePath) {
                 settingsPanelContent.querySelectorAll('#settingsIncludeReasoningToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
             };
         });
-        settingsPanelContent.querySelectorAll('#settingsAskToggle .think-mode-option').forEach(function(o) {
-            o.onclick = function() {
-                askEnabled = o.dataset.value === 'true';
-                saveSettingsToLocal();
-                settingsPanelContent.querySelectorAll('#settingsAskToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
-            };
-        });
-        settingsPanelContent.querySelectorAll('#settingsAskAutoToggle .think-mode-option').forEach(function(o) {
-            o.onclick = function() {
-                askAutoShow = o.dataset.value === 'true';
-                saveSettingsToLocal();
-                settingsPanelContent.querySelectorAll('#settingsAskAutoToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
-            };
-        });
     }
 
     function renderPluginsTab() {
@@ -683,10 +694,7 @@ async function openFileInBrowser(filePath) {
             '<button class="think-mode-option' + (!commandConfirmEnabled ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
             '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 12 3 12 12 3 21 12 19 12"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/></svg>' + _('compressOldExec') + '</span><div class="think-mode-selector" id="settingsCompressExecToggle" style="display:inline-flex;">' +
             '<button class="think-mode-option' + (compressOldExecutions ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!compressOldExecutions ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div>' +
-            '<div class="settings-item"><span class="settings-item-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 6 10 12 4 18"/><line x1="14" y1="6" x2="20" y2="6"/><line x1="14" y1="12" x2="20" y2="12"/><line x1="14" y1="18" x2="20" y2="18"/></svg>' + _('collapsePluginOutput') + '</span><div class="think-mode-selector" id="settingsCollapsePluginToggle" style="display:inline-flex;">' +
-            '<button class="think-mode-option' + (collapsePluginOutput ? ' active' : '') + '" data-value="true">' + _('on') + '</button>' +
-            '<button class="think-mode-option' + (!collapsePluginOutput ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
+            '<button class="think-mode-option' + (!compressOldExecutions ? ' active' : '') + '" data-value="false">' + _('off') + '</button></div></div></div>';
         settingsPanelContent.querySelectorAll('#settingsConfirmToggle .think-mode-option').forEach(function(o) {
             o.onclick = function() {
                 commandConfirmEnabled = o.dataset.value === 'true';
@@ -701,13 +709,6 @@ async function openFileInBrowser(filePath) {
                 settingsPanelContent.querySelectorAll('#settingsCompressExecToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
                 saveSettingsToLocal();
                 if (window.CommandExecutionPlugin) window.CommandExecutionPlugin.setCompressOldExecutions(compressOldExecutions);
-            };
-        });
-        settingsPanelContent.querySelectorAll('#settingsCollapsePluginToggle .think-mode-option').forEach(function(o) {
-            o.onclick = function() {
-                collapsePluginOutput = o.dataset.value === 'true';
-                settingsPanelContent.querySelectorAll('#settingsCollapsePluginToggle .think-mode-option').forEach(function(x) { x.classList.toggle('active', x === o); });
-                saveSettingsToLocal();
             };
         });
     }
@@ -1561,6 +1562,20 @@ async function openFileInBrowser(filePath) {
         if (typeof marked === 'undefined') return escapeHtml(text).replace(/\n/g, '<br>');
         // Prevent marked from treating [title]:score as markdown reference link (which gets hidden)
         text = text.replace(/^\[([^\]]+)\]:(?=\d)/gm, '[$1] :');
+        // Save code blocks, escape ~ outside them, close unmatched * markers
+        var mdCodeBlocks = [];
+        text = text.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, function(m) {
+            mdCodeBlocks.push(m);
+            return '\x00CB' + (mdCodeBlocks.length - 1) + '\x00';
+        });
+        // Escape tilde to prevent strikethrough parsing
+        text = text.replace(/~/g, '&#126;');
+        // Close unclosed ** (bold) and * (italic) to prevent formatting bleeding
+        if ((text.match(/\*\*/g) || []).length % 2 !== 0) text += '**';
+        var plainStars = text.match(/(?<!\*)\*(?!\*)/g);
+        if (plainStars && plainStars.length % 2 !== 0) text += '*';
+        // Restore code blocks
+        text = text.replace(/\x00CB(\d+)\x00/g, function(_, n) { return mdCodeBlocks[parseInt(n)]; });
         var renderer = new marked.Renderer();
         renderer.code = function(tok) {
             var codeText = tok && tok.text ? tok.text : '';
@@ -1579,9 +1594,8 @@ async function openFileInBrowser(filePath) {
             return '<code>' + escapeHtml(typeof tok === 'string' ? tok : (tok.text || '')) + '</code>';
         };
         renderer.del = function(tok) {
-            return typeof tok === 'string' ? tok : (tok.text || tok.raw || '');
+            return '~' + (typeof tok === 'string' ? tok : (tok.text || '')) + '~';
         };
-        renderer.strikethrough = renderer.del;
         return marked.parse(text, { renderer: renderer, gfm: true, breaks: true });
     }
 
@@ -1642,21 +1656,37 @@ async function openFileInBrowser(filePath) {
         var thinkOpts = (msgRef && msgRef.thinkElapsed) ? { elapsedSeconds: msgRef.thinkElapsed } : {};
         var reasoningHtml = reasoning ? createThinkBlock(reasoning, thinkOpts) : '';
         var contentHtml;
-        if (role === 'ai') {
+        if (msgRef && msgRef._isError) {
+            contentHtml = '<div class="markdown-body" style="color:#e74c3c;white-space:pre-wrap;">' + escapeHtml(content) + '</div>';
+        } else if (role === 'ai') {
             var rendered = _renderAIContent(content);
             contentHtml = '<div class="markdown-body">' + rendered + '</div>';
         } else if (msgRef && msgRef._isExec) {
-            // 命令执行结果使用 plugin-block 折叠样式
+            // 命令执行结果使用 timeline 折叠样式
             var execTitle = (msgRef._execTitle || (content || '').split('\n')[0] || '').replace(/^(命令结果|命令失败|命令异常):\s*/, '') || msgRef._execTitle || (content || '').split('\n')[0] || ' ';
             var body = msgRef._execBody || content || '';
-            contentHtml = '<div class="plugin-block cmd-block collapsed">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">' + escapeHtml(execTitle) + '</span>' +
-                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;transition:transform .2s;">' +
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
+            var execShell = msgRef._execShell || 'shell';
+            var execExitCode = msgRef._execExitCode;
+            var hasExit = (typeof execExitCode !== 'undefined' && execExitCode !== null);
+            var exitIcon = hasExit ? (execExitCode === 0 ? '✓' : '✗') : '';
+            var exitColor = hasExit ? (execExitCode === 0 ? '#4ade80' : '#e74c3c') : '';
+            var dotIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg>';
+            var arrowDown = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg>';
+            contentHtml = '<div class="think-block cmd-timeline-block collapsed">' +
+                '<div class="think-header" onclick="toggleThinkBlock(this)">' +
+                    '<div class="think-icon">' + dotIcon + '</div>' +
+                    '<span class="cs-shell-badge">' + escapeHtml(execShell) + '</span>' +
+                    '<span class="cmd-text">' + escapeHtml(execTitle) + '</span>' +
+                    (hasExit ? '<span class="think-status" style="margin-left:6px;font-size:11px;color:' + exitColor + '">' + exitIcon + '</span>' : '<span class="think-status" style="display:none;margin-left:6px;font-size:11px;"></span>') +
+                    '<div class="think-arrow">' + arrowDown + '</div>' +
                 '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(body || ' ') + '</div>' +
-                '</div>';
+                '<div class="think-body-wrapper">' +
+                    '<div class="think-line"></div>' +
+                    '<div class="think-content">' +
+                        '<div class="cs-result-block">' + escapeHtml(body || ' ') + '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
         } else if (msgRef && (msgRef._fileCard || msgRef._fileName)) {
             // 文件卡片（图片/视频/文件）优先于 system 渲染，避免 tool → system 映射后被当作 markdown 显示
             // 文件/图片/视频卡片展示
@@ -1818,12 +1848,14 @@ async function openFileInBrowser(filePath) {
                     }
                     var newBubble = createMessageBubble(newContent, role, msgRef.images || [], msgRef.reasoning || '', msgRef, '');
                     bubble.parentNode.replaceChild(newBubble, bubble);
+                    if (typeof window.__restoreCmdResultsFromHistory === 'function') window.__restoreCmdResultsFromHistory();
                     saveChatToBackend();
                 }
             };
             var cancelEdit = function() {
                 var newBubble = createMessageBubble(content, role, msgRef && msgRef.images || [], msgRef && msgRef.reasoning || '', msgRef, '');
                 bubble.parentNode.replaceChild(newBubble, bubble);
+                if (typeof window.__restoreCmdResultsFromHistory === 'function') window.__restoreCmdResultsFromHistory();
             };
             saveBtn.onclick = saveEdit;
             cancelBtn.onclick = cancelEdit;
@@ -1891,6 +1923,8 @@ async function openFileInBrowser(filePath) {
         var role = bubble.classList.contains('message-ai') ? 'ai' : (bubble.classList.contains('message-user') ? 'user' : 'system');
         var newBubble = createMessageBubble(msgRef.content, role, msgRef.images || [], msgRef.reasoning || '', msgRef);
         bubble.parentNode.replaceChild(newBubble, bubble);
+        // 切换版本后重新注入命令结果
+        if (typeof window.__restoreCmdResultsFromHistory === 'function') window.__restoreCmdResultsFromHistory();
         saveChatToBackend();
     }
 
@@ -1901,6 +1935,8 @@ async function openFileInBrowser(filePath) {
         if (chats[currentChat] && chats[currentChat].length > 0) {
             document.body.classList.add('chat-active');
             chats[currentChat].forEach(function(m) {
+                // 跳过所有命令执行结果消息（注入到 think-block 中，不单独显示）
+                if (m._isExec && (m.role === 'tool' || m.role === 'system')) return;
                 var b = createMessageBubble(m.content, m.role, m.images || [], m.reasoning || '', m);
                 if (m.hidden) {
                     b.classList.add('msg-collapsed');
@@ -1908,11 +1944,50 @@ async function openFileInBrowser(filePath) {
                 }
                 chatAreaInner.appendChild(b);
             });
+            // 从历史记录中恢复命令执行结果到对应的 think-block
+            __restoreCmdResultsFromHistory();
         }
         if (emptyHint) emptyHint.style.display = chatAreaInner.children.length === 0 ? '' : 'none';
         chatArea.scrollTop = chatArea.scrollHeight;
     }
 
+    // 在历史对话加载完成后，将 _isExec 命令执行结果注入到 AI 回复的 think-block 中
+    window.__restoreCmdResultsFromHistory = function() {
+        if (!chats[currentChat] || !chatAreaInner) return;
+        var needScroll = false;
+        chats[currentChat].forEach(function(m) {
+            if (!m._isExec || !m._execCommand) return;
+            var block = null;
+            var allBlocks = chatAreaInner.querySelectorAll('.cmd-timeline-block:not(.has-result)');
+            for (var i = 0; i < allBlocks.length; i++) {
+                if (allBlocks[i].getAttribute('data-cmd') === escapeHtml(m._execCommand)) {
+                    block = allBlocks[i];
+                    break;
+                }
+            }
+            if (!block && allBlocks.length > 0) block = allBlocks[0];
+            if (block) {
+                block.classList.add('has-result');
+                var contentEl = block.querySelector('.think-content');
+                var statusEl = block.querySelector('.think-status');
+                if (contentEl) {
+                    var rawOut = m._execStdout || m._execStderr || '';
+                    var bodyStr = rawOut.trim() || _('noOutput');
+                    var exitClass = m._execExitCode === 0 ? 'cs-exit-ok' : 'cs-exit-fail';
+                    var exitIcon = m._execExitCode === 0 ? '✓' : '✗';
+                    contentEl.innerHTML += '<div class="cs-result-sep"></div><div class="cs-result-block">' + escapeHtml(bodyStr) + '</div><span class="' + exitClass + '">' + exitIcon + ' ' + _('exitCode') + m._execExitCode + '</span>';
+                }
+                if (statusEl) {
+                    var exitIcon2 = m._execExitCode === 0 ? '✓' : '✗';
+                    statusEl.textContent = exitIcon2;
+                    statusEl.style.display = '';
+                    statusEl.style.color = m._execExitCode === 0 ? '#4ade80' : '#e74c3c';
+                }
+                needScroll = true;
+            }
+        });
+        if (needScroll) chatArea.scrollTop = chatArea.scrollHeight;
+    };
     function addMessage(content, role, images, reasoning, msgRef) {
         if (!chatAreaInner) return null;
         var bubble = createMessageBubble(content, role, images, reasoning, msgRef);
@@ -1986,6 +2061,63 @@ async function openFileInBrowser(filePath) {
         return block;
     }
 
+    // 创建命令执行汇总块（时间线样式，类似深度思考的两段式布局）
+    // 第一段：显示全部执行的命令；第二段：显示全部命令结果
+    function createCmdSummaryBlock(summaryTitle, summaryResults) {
+        var block = document.createElement('div');
+        block.className = 'cmd-summary-block';
+        // Commands list HTML
+        var cmdsHtml = '';
+        summaryResults.forEach(function(r) {
+            var shellLabel = r.cmd && r.cmd.shell ? r.cmd.shell : 'shell';
+            var cmdText = r.cmd && r.cmd.command ? r.cmd.command : '';
+            cmdsHtml += '<div class="cs-cmd-line"><span class="cs-shell-badge">' + escapeHtml(shellLabel) + '</span><span>' + escapeHtml(cmdText) + '</span></div>';
+        });
+        // Results content HTML
+        var resultsHtml = '';
+        summaryResults.forEach(function(r, i) {
+            if (i > 0) resultsHtml += '<div class="cs-result-sep"></div>';
+            if (r.cmd) {
+                resultsHtml += '<div class="cs-cmd-line" style="margin-bottom:4px;"><span class="cs-shell-badge">' + escapeHtml(r.cmd.shell || 'shell') + '</span><span style="opacity:0.7;">' + escapeHtml(r.cmd.command) + '</span></div>';
+            }
+            var rawOut = r.stdout || r.stderr || '';
+            var bodyStr = rawOut.trim() || _('noOutput');
+            var exitClass = r.exitCode === 0 ? 'cs-exit-ok' : 'cs-exit-fail';
+            var exitIcon = r.exitCode === 0 ? '✓' : '✗';
+            resultsHtml += '<div class="cs-result-block">' + escapeHtml(bodyStr) + '\n<span class="' + exitClass + '">' + exitIcon + ' ' + _('exitCode') + r.exitCode + '</span></div>';
+        });
+        var dotIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg>';
+        var arrowDown = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg>';
+        block.innerHTML =
+            '<div class="think-block" style="margin-left:-12px;">' +
+                '<div class="think-header" onclick="toggleThinkBlock(this)">' +
+                    '<div class="think-icon">' + dotIcon + '</div>' +
+                    '<span class="cs-title">' + escapeHtml(summaryTitle) + '</span>' +
+                    '<div class="think-arrow">' + arrowDown + '</div>' +
+                '</div>' +
+                '<div class="think-body-wrapper">' +
+                    '<div class="think-line"></div>' +
+                    '<div class="think-content">' +
+                        cmdsHtml +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="think-block" style="margin-left:-12px;">' +
+                '<div class="think-header" onclick="toggleThinkBlock(this)">' +
+                    '<div class="think-icon">' + dotIcon + '</div>' +
+                    '<span>' + (_('execResults') || '命令执行结果') + '</span>' +
+                    '<div class="think-arrow">' + arrowDown + '</div>' +
+                '</div>' +
+                '<div class="think-body-wrapper">' +
+                    '<div class="think-line"></div>' +
+                    '<div class="think-content">' +
+                        resultsHtml +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        return block;
+    }
+
     function updateCmdBlock(el, title, bodyText) {
         var titleEl = el.querySelector('.plugin-block-title');
         if (titleEl) titleEl.textContent = title;
@@ -2047,12 +2179,106 @@ async function openFileInBrowser(filePath) {
     }
 
     var pluginBlockTimers = {};
+    window.__cmdTimelineBids = [];
     var _pluginBlockPlaceholders = {};
     function _pluginMark(html) {
         var id = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         _pluginBlockPlaceholders[id] = html;
         return '%%PBM_' + id + '%%';
     }
+    function _cmdTimelineHtml(bid, shell, cmd) {
+        var cmdTrim = cmd.trim();
+        var cmdShort = cmdTrim.length > 40 ? cmdTrim.substring(0, 37) + '...' : cmdTrim;
+        var dotIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg>';
+        var arrowDown = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg>';
+        window.__cmdTimelineBids.push(bid);
+        return _pluginMark('<div class="think-block cmd-timeline-block collapsed" id="' + bid + '" data-cmd="' + escapeHtml(cmdTrim) + '">' +
+            '<div class="think-header" onclick="toggleThinkBlock(this)">' +
+                '<div class="think-icon">' + dotIcon + '</div>' +
+                '<span class="cs-shell-badge">' + escapeHtml(shell) + '</span>' +
+                '<span class="cmd-text">' + escapeHtml(cmdShort) + '</span>' +
+                '<span class="think-status" style="display:none;margin-left:6px;font-size:11px;"></span>' +
+                '<div class="think-arrow">' + arrowDown + '</div>' +
+            '</div>' +
+            '<div class="think-body-wrapper">' +
+                '<div class="think-line"></div>' +
+                '<div class="think-content">' +
+                    '<div class="cs-result-block">' + escapeHtml(cmdTrim) + '</div>' +
+                '</div>' +
+            '</div>' +
+        '</div>');
+    }
+    // 创建已执行完成的命令结果时间线块（用于后端 Agent 模式）
+    window.createCmdResultTimeline = function(result) {
+        var shell = result.cmd ? result.cmd.shell : 'shell';
+        var cmdText = result.cmd ? result.cmd.command : '';
+        var cmdShort = cmdText.length > 40 ? cmdText.substring(0, 37) + '...' : cmdText;
+        var rawOut = result.stdout || result.stderr || '';
+        var bodyStr = rawOut.trim() || _('noOutput');
+        var exitClass = result.exitCode === 0 ? 'cs-exit-ok' : 'cs-exit-fail';
+        var exitIcon = result.exitCode === 0 ? '✓' : '✗';
+        var dotIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z" fill="currentColor"></path></svg>';
+        var arrowDown = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg>';
+        var block = document.createElement('div');
+        block.className = 'think-block cmd-timeline-block collapsed';
+        block.innerHTML =
+            '<div class="think-header" onclick="toggleThinkBlock(this)">' +
+                '<div class="think-icon">' + dotIcon + '</div>' +
+                '<span class="cs-shell-badge">' + escapeHtml(shell) + '</span>' +
+                '<span class="cmd-text">' + escapeHtml(cmdShort) + '</span>' +
+                '<span class="think-status" style="margin-left:6px;font-size:11px;color:' + (result.exitCode === 0 ? '#4ade80' : '#e74c3c') + '">' + exitIcon + '</span>' +
+                '<div class="think-arrow">' + arrowDown + '</div>' +
+            '</div>' +
+            '<div class="think-body-wrapper">' +
+                '<div class="think-line"></div>' +
+                '<div class="think-content">' +
+                    '<div class="cs-result-block">' + escapeHtml(cmdText) + '</div>' +
+                    '<div class="cs-result-sep"></div>' +
+                    '<div class="cs-result-block">' + escapeHtml(bodyStr) + '</div>' +
+                    '<span class="' + exitClass + '">' + exitIcon + ' ' + _('exitCode') + result.exitCode + '</span>' +
+                '</div>' +
+            '</div>';
+        return block;
+    };
+    // 在气泡渲染完成后，将命令执行结果注入到 think-block 中
+    window.__pendingExecResults = [];
+    window.__injectCmdResults = function() {
+        if (!window.__pendingExecResults || window.__pendingExecResults.length === 0) return;
+        var results = window.__pendingExecResults.slice();
+        window.__pendingExecResults = [];
+        results.forEach(function(r) {
+            if (!r || !r.cmd) return;
+            var cmdKey = r.cmd.command.trim();
+            var block = null;
+            var allBlocks = chatAreaInner.querySelectorAll('.cmd-timeline-block:not(.has-result)');
+            for (var i = 0; i < allBlocks.length; i++) {
+                if (allBlocks[i].getAttribute('data-cmd') === escapeHtml(cmdKey)) {
+                    block = allBlocks[i];
+                    break;
+                }
+            }
+            if (!block && allBlocks.length > 0) block = allBlocks[0];
+            if (block) {
+                block.classList.add('has-result');
+                var contentEl = block.querySelector('.think-content');
+                var statusEl = block.querySelector('.think-status');
+                if (contentEl) {
+                    var rawOut = r.stdout || r.stderr || '';
+                    var bodyStr = rawOut.trim() || _('noOutput');
+                    var exitClass = r.exitCode === 0 ? 'cs-exit-ok' : 'cs-exit-fail';
+                    var exitIcon = r.exitCode === 0 ? '✓' : '✗';
+                    contentEl.innerHTML += '<div class="cs-result-sep"></div><div class="cs-result-block">' + escapeHtml(bodyStr) + '</div><span class="' + exitClass + '">' + exitIcon + ' ' + _('exitCode') + r.exitCode + '</span>';
+                }
+                if (statusEl) {
+                    var exitIcon2 = r.exitCode === 0 ? '✓' : '✗';
+                    statusEl.textContent = exitIcon2;
+                    statusEl.style.display = '';
+                    statusEl.style.color = r.exitCode === 0 ? '#4ade80' : '#e74c3c';
+                }
+            }
+        });
+        chatArea.scrollTop = chatArea.scrollHeight;
+    };
     function estimateTokens(text) {
         if (!text) return 0;
         var tokens = 0;
@@ -2106,88 +2332,46 @@ async function openFileInBrowser(filePath) {
         // 保护被 `` 包裹的标记, 如 `<cmd>` 直接渲染不执行
         var backtickProtected = {};
         var btIdx = 0;
-        result = result.replace(/`(?:[^`]*)<(?:cmd|command|power|powershell|shell|mem:)[^`]*`/gi, function(match) {
+        result = result.replace(/`(?:[^`]*)<(?:cmd|command|power|powershell|shell|cwd|ask|mem:|Plugin-cmd)[^`]*`/gi, function(match) {
             var id = btIdx++;
             backtickProtected[id] = match;
             return '%%BTP_' + id + '%%';
         });
+
+        // Strip Plugin-cmd wrapper tags (not displayed, only structural)
+        result = result.replace(/<\/Plugin-cmd>/gi, '');
+        result = result.replace(/<Plugin-cmd[^>]*>/gi, '');
+
         // Replace power/powershell blocks
         result = result.replace(/<(?:power|powershell)>\s*([\s\S]*?)\s*<\/(?:power|powershell)>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
-            var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
-            return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
-                '</div>');
+            return _cmdTimelineHtml(bid, 'powershell', cmd);
         });
+
         // Replace cmd/command blocks
         result = result.replace(/<(?:cmd|command)>\s*([\s\S]*?)\s*<\/(?:cmd|command)>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
-            var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
-            return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
-                '</div>');
+            return _cmdTimelineHtml(bid, 'cmd', cmd);
         });
+
         // Replace shell blocks
         result = result.replace(/<shell>\s*([\s\S]*?)\s*<\/shell>/gi, function(match, cmd) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
             pluginBlockTimers[bid] = { done: true, type: 'cmd', content: cmd.trim() };
-            var cmdShort = cmd.trim().length > 40 ? cmd.trim().substring(0, 37) + '...' : cmd.trim();
-            return _pluginMark('<div class="plugin-block cmd-block collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">' + escapeHtml(cmdShort) + '</span>' +
-                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(cmd.trim()) + '</div>' +
-                '</div>');
+            return _cmdTimelineHtml(bid, 'shell', cmd);
         });
-        // Replace mem:key blocks
-        result = result.replace(/<mem:([^>]+)>([\s\S]*?)<\/mem:\1>/gi, function(match, key, content) {
+
+        // Replace cwd blocks (working directory change)
+        result = result.replace(/<cwd>\s*([\s\S]*?)\s*<\/cwd>/gi, function(match, dir) {
             var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem', key: key.trim() };
-            return _pluginMark('<div class="plugin-block mem-block collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
-                '</div>');
+            pluginBlockTimers[bid] = { done: true, type: 'cmd', content: dir.trim() };
+            return _cmdTimelineHtml(bid, 'cwd', dir);
         });
-        // 未闭合的开标签 —— 立即渲染为 streaming 块，不等闭标签
-        result = result.replace(/<(power|powershell|cmd|command|shell)>\s*([\s\S]*)$/gi, function(match, tag, content) {
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { done: false, type: 'cmd', content: content.trim() };
-            var contentShort = content.trim().length > 40 ? content.trim().substring(0, 37) + '...' : content.trim();
-            return _pluginMark('<div class="plugin-block cmd-block streaming collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">' + escapeHtml(contentShort) + '</span>' +
-                '<span class="think-arrow" style="margin-left:auto;display:flex;align-items:center;opacity:0.4;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
-                '</div>');
-        });
-        // mem:key 未闭合
-        result = result.replace(/<mem:([^>]+)>([\s\S]*)$/gi, function(match, key, content) {
-            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem', key: key.trim() };
-            return _pluginMark('<div class="plugin-block mem-block streaming collapsed" id="' + bid + '">' +
-                '<div class="plugin-block-header">' +
-                '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
-                '</div>' +
-                '<div class="plugin-block-body">' + escapeHtml(content) + '</div>' +
-                '</div>');
-        });
-        // Clear any pending ask from previous iterations; will be re-set below if current content has one
-        _pendingAsk = null;
+
         // Replace <ask> blocks — render inline block + store for popup
+        _pendingAsk = null;
         result = result.replace(/<ask>([\s\S]*?)<\/ask>/gi, function(match, inner) {
             var qMatch = inner.match(/<q=([^>]*)>/);
             var question = qMatch ? qMatch[1].trim() : '';
@@ -2208,17 +2392,35 @@ async function openFileInBrowser(filePath) {
             }
             return '';
         });
-        // Remove mem-del tags and conti:994
-        result = result.replace(/<mem-del:[^>]+>/gi, '');
-        result = result.replace(/<conti:994>/gi, '');
+        // Replace mem:key blocks
+        result = result.replace(/<mem:([^>]+)>([\s\S]*?)<\/mem:\1>/gi, function(match, key, content) {
+            var bid = 'pb-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+            pluginBlockTimers[bid] = { start: Date.now(), done: true, type: 'mem', key: key.trim() };
+            return _pluginMark('<div class="plugin-block mem-block collapsed" id="' + bid + '">' +
+                '<div class="plugin-block-header">' +
+                '<span class="plugin-block-title">记忆写入: ' + escapeHtml(key.trim()) + '</span>' +
+                '</div>' +
+                '<div class="plugin-block-body">' + escapeHtml(content.trim()) + '</div>' +
+                '</div>');
+        });
+
+        // 未闭合的开标签 — 流式输出中隐藏，等完整标签到达后再渲染
+        result = result.replace(/<(power|powershell|cmd|command|shell|cwd)>\s*([\s\S]*)$/gi, '');
+
+        // mem:key 未闭合
+        result = result.replace(/<mem:([^>]+)>([\s\S]*)$/gi, '');
+
         // 恢复被保护的反引号内容
         result = result.replace(/%%BTP_(\d+)%%/g, function(m, id) {
             return backtickProtected[id] || '';
         });
+
+        // 去除流式输出末尾不完整的标记片段（如 <cm, </cm, <po 等）
+        result = result.replace(/<(?:cm|cmd|command|po|power|powershell|sh|shell|cw|cwd|as|ask|mem|Plugin-cm|plugin-cm)[^>]*$/gi, '');
+        result = result.replace(/<\/(?:cm|cmd|command|po|power|powershell|sh|shell|cw|cwd|as|ask|mem|plugin-cm)[^>]*$/gi, '');
         return result;
     }
 
-    // 用于流式输出时的快速折叠：检测开标签立即包裹
 
     function activateChat(animated) {
         isChatActive = true;
@@ -2505,20 +2707,29 @@ async function openFileInBrowser(filePath) {
         if (!inputWrapper) {
             inputWrapper = { getBoundingClientRect: function() { return { width: 400, left: 20, top: window.innerHeight - 100 }; } };
         }
-        var overlay = document.createElement('div');
+                var overlay = document.createElement('div');
         overlay.className = 'ask-overlay';
-        var optionsHtml = data.options.map(function(o) {
+        var optionsHtml = data.options.slice(0, 9).map(function(o) {
             return '<button class="ask-option-btn" data-value="' + escapeHtml(o) + '">' + escapeHtml(o) + '</button>';
         }).join('');
-        overlay.innerHTML = '<div class="ask-panel"><div class="ask-panel-question">' + escapeHtml(data.question) + '</div><div class="ask-panel-options">' + optionsHtml + '<button class="ask-option-btn ask-option-none">什么都不选</button></div></div>';
+        overlay.innerHTML = '<div class="ask-panel" style="position:relative;">' +
+            '<button class="ask-close-btn">×</button>' +'<div class="ask-panel-question">' + escapeHtml(data.question) + '</div>' +
+            '<div class="ask-panel-options">' + optionsHtml + '</div>' +
+            '</div>';
         document.body.appendChild(overlay);
         requestAnimationFrame(function() {
             var iwr = inputWrapper.getBoundingClientRect();
             overlay.style.width = iwr.width + 'px';
             overlay.style.left = iwr.left + 'px';
-            overlay.style.bottom = (window.innerHeight - iwr.top + 10) + 'px';
+            overlay.style.bottom = (window.innerHeight - iwr.top + 12) + 'px';
             overlay.classList.add('active');
         });
+
+                overlay.querySelector('.ask-close-btn').addEventListener('click', function() {
+            overlay.classList.remove('active');
+            setTimeout(function() { overlay.remove(); }, 200);
+        });
+
         overlay.querySelectorAll('.ask-option-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var answer = this.dataset.value;
@@ -2585,7 +2796,7 @@ async function openFileInBrowser(filePath) {
             var popup = document.createElement('div');
             popup.className = 'deep-think-popup';
             popup._triggerBtn = triggerBtn;
-            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>' + (_('sandbox') || '安全沙箱') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + (_('cothink') || '思维链注入') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>' + (_('modelAsk') || '模型提问') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (askEnabled ? ' active' : '') + '" data-tool="ask" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!askEnabled ? ' active' : '') + '" data-tool="ask" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
+            popup.innerHTML = '<div class="deep-think-popup-inner"><div class="tool-chain-section"><div class="tool-chain-title">' + _('toolChain') + '</div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg><span>' + _('memory') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!memoryEnabled ? ' active' : '') + '" data-tool="memory" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>' + _('commandExec') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!commandExecEnabled ? ' active' : '') + '" data-tool="command" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>' + (_('sandbox') || '安全沙箱') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="on">' + _('on') + '</button><button class="tool-chain-option' + (!sandboxEnabled ? ' active' : '') + '" data-tool="sandbox" data-value="off">' + _('off') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>' + _('agent') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!agentEnabled ? ' active' : '') + '" data-tool="agent" data-value="off">' + _('disable') + '</button></div></div><div class="tool-chain-item"><div class="tool-chain-item-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + (_('cothink') || '思维链注入') + '</span></div><div class="tool-chain-toggle"><button class="tool-chain-option' + (cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="on">' + _('allow') + '</button><button class="tool-chain-option' + (!cothinkEnabled ? ' active' : '') + '" data-tool="cothink" data-value="off">' + _('disable') + '</button></div></div></div><div class="think-section"><span class="think-section-title">' + _('thinkMode') + '</span><div class="think-mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px;width:320px;"><button class="think-mode-option' + (currentThinkMode === 'fast' ? ' active' : '') + '" data-mode="fast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>' + _('fast') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'think' ? ' active' : '') + '" data-mode="think"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span>' + _('think') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'deep' ? ' active' : '') + '" data-mode="deep"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.47V19a2 2 0 11-4 0v-.53c0-1.03-.47-1.99-1.274-2.618l-.548-.547z"/></svg><span>' + _('deep') + '</span></button><button class="think-mode-option' + (currentThinkMode === 'meditate' ? ' active' : '') + '" data-mode="meditate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span>' + _('meditate') + '</span></button></div></div></div>';
             document.body.appendChild(popup);
             var rect = triggerBtn.getBoundingClientRect();
             popup.style.left = (rect.left + rect.width / 2 - 10) + 'px';
@@ -2629,11 +2840,7 @@ async function openFileInBrowser(filePath) {
                         popup.querySelectorAll('.tool-chain-option[data-tool="cothink"]').forEach(function(o) { o.classList.toggle('active', o === op); });
                         saveSettingsToLocal();
                     }
-                    if (tool === 'ask') {
-                        askEnabled = value === 'on';
-                        popup.querySelectorAll('.tool-chain-option[data-tool="ask"]').forEach(function(o) { o.classList.toggle('active', o === op); });
-                        saveSettingsToLocal();
-                    }
+                    
                     if (tool === 'sandbox') {
                         sandboxEnabled = value === 'on';
                         popup.querySelectorAll('.tool-chain-option[data-tool="sandbox"]').forEach(function(o) { o.classList.toggle('active', o === op); });
@@ -2650,6 +2857,7 @@ async function openFileInBrowser(filePath) {
     });
 
     loadSettings();
+    applyUiScale(uiScale);
     loadBranches();
     loadPinnedChats();
     var langText = document.getElementById('langSwitchText');

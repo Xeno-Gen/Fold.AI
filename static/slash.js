@@ -196,7 +196,6 @@
             if (agentEnabled && pluginPrompts.Agent) parts.push(pluginPrompts.Agent);
             if (cothinkEnabled && pluginPrompts.cothink) parts.push(pluginPrompts.cothink);
             if (memoryEnabled && pluginPrompts.Memory) parts.push(pluginPrompts.Memory);
-            if (askEnabled && pluginPrompts.Ask) parts.push(pluginPrompts.Ask);
             toolPromptText = parts.join('\n');
         }
         var toolTokens = toolPromptText ? estimateTokens(toolPromptText) : 0;

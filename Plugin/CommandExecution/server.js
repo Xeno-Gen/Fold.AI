@@ -226,7 +226,7 @@ module.exports = function(context) {
         // ---- PowerShell / CMD：构建脚本 ----
         // 恢复持久工作目录
         const prevCwd = readSessionCwd(req.userToken);
-        let effectiveWorkDir = prevCwd || workDir;
+        let effectiveWorkDir = workDir || prevCwd;
         if (!fs.existsSync(effectiveWorkDir)) effectiveWorkDir = workDir;
 
         const marker = '__EX_DONE_' + Date.now().toString(36) + '__';
@@ -239,7 +239,7 @@ module.exports = function(context) {
                 '$OutputEncoding = [System.Text.Encoding]::UTF8\r\n' +
                 "$PSDefaultParameterValues['*:Encoding'] = 'utf8'\r\n" +
                 'Set-Location "' + effectiveWorkDir.replace(/"/g, '""') + '"\r\n' +
-                command;
+                '& {\r\n' + command + '\r\n} *>&1 | Out-String -Width 4096 -Stream';
             const tmpFile = path.join(workDir, '_ps_tmp_' + Date.now() + '.ps1');
             const { promise, child } = spawnWithOutput(
                 psPath,
@@ -305,6 +305,7 @@ module.exports = function(context) {
 
         const duration = Date.now() - startTime;
         context.logger.info('[exec] ' + shell + ' exit=' + result.exitCode + ' dur=' + duration + 'ms');
+        result.workDir = effectiveWorkDir;
         res.json(result);
 
         function finishExec(error, stdout, stderr) {
@@ -314,6 +315,7 @@ module.exports = function(context) {
                 stdout: decode(stdout), stderr: decode(stderr),
                 exitCode: error ? (error.code || 1) : 0,
                 duration, shell, command,
+                workDir: effectiveWorkDir,
             };
             if (error && !result.stderr) result.stderr = error.message;
             context.logger.info('[exec] ' + shell + ' exit=' + result.exitCode + ' dur=' + duration + 'ms');

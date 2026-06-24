@@ -1679,22 +1679,6 @@ input:checked + .slider::before {
     border: none;
     font-size: 15px;
 }
-.plugin-block.cmd-block .plugin-block-header {
-    display: flex;
-    gap: 6px;
-    padding: 4px 8px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-}
-.cmd-block-edit:hover {
-    color: #333 !important;
-    background: rgba(0,0,0,0.06);
-}
-[data-theme="dark"] .cmd-block-edit:hover {
-    color: #ccc !important;
-    background: rgba(255,255,255,0.08);
-}
 .plugin-block-header {
     display: inline-flex;
     align-items: center;
@@ -1757,6 +1741,113 @@ input:checked + .slider::before {
 }
 .plugin-block:not(.collapsed) .plugin-block-header .think-arrow {
     transform: rotate(180deg);
+}
+
+/* ========== 命令执行时间线条（流式内联标记块） ========== */
+.cmd-timeline-block {
+    margin: 2px 0;
+}
+.cmd-timeline-block .think-header {
+    padding: 3px 0;
+    margin-bottom: 0;
+    font-size: 13px;
+    font-weight: 500;
+}
+.cmd-timeline-block .think-header .cmd-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--text, #333);
+}
+.cmd-timeline-block .think-header .cs-shell-badge {
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+.cmd-timeline-block .think-body-wrapper .think-content {
+    padding: 0;
+}
+.cmd-timeline-block.has-result .think-header .think-status {
+    font-weight: 600;
+}
+[data-theme="dark"] .cmd-timeline-block .think-header .cmd-text {
+    color: var(--text, #e8e8e8);
+}
+
+/* ========== 命令执行汇总（时间线样式） ========== */
+.cmd-summary-block {
+    margin: 4px 0;
+}
+.cmd-summary-block .think-header {
+    padding: 5px 0;
+    margin-bottom: 0;
+    font-size: 13px;
+    font-weight: 500;
+}
+.cmd-summary-block .think-header .cs-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cs-cmd-line {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    padding: 2px 0;
+    color: var(--text, #333);
+    word-break: break-all;
+    line-height: 1.6;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.cs-shell-badge {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--code-bg, #eee);
+    color: var(--text-secondary, #888);
+    flex-shrink: 0;
+    line-height: 1.8;
+}
+.cs-result-block {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text, #333);
+    margin: 0;
+    padding: 2px 0;
+}
+.cs-result-sep {
+    border-top: 1px dashed var(--border, #ddd);
+    margin: 6px 0;
+}
+.cs-exit-ok {
+    color: #4ade80;
+    font-weight: 600;
+}
+.cs-exit-fail {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .cmd-summary-block .think-header {
+    color: var(--think-text, #999);
+}
+[data-theme="dark"] .cs-cmd-line {
+    color: var(--text, #e8e8e8);
+}
+[data-theme="dark"] .cs-result-block {
+    color: var(--text, #e8e8e8);
+}
+[data-theme="dark"] .cs-result-sep {
+    border-top-color: var(--border, #2a2a2a);
 }
 .plugin-block.mem-block .plugin-block-header {
     background: linear-gradient(90deg,
@@ -1889,14 +1980,14 @@ input:checked + .slider::before {
     background: #ccc;
 }
 
-/* ========== 提问弹出面板（输入框上方气泡） ========== */
+/* ========== 提问弹出面板（输入框上方悬浮） ========== */
 .ask-overlay {
     position: fixed;
     z-index: 999;
     pointer-events: none;
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+    transform: translateY(12px) scale(0.95);
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.18s ease;
     transform-origin: bottom center;
 }
 .ask-overlay.active {
@@ -1905,83 +1996,94 @@ input:checked + .slider::before {
     pointer-events: all;
 }
 .ask-panel {
-    background: #fff;
-    border-radius: 22px;
-    padding: 16px 18px 14px;
-    box-shadow: var(--shadow-lg);
-    border: 1px solid #e8e8e8;
+    padding: 0;
     width: 100%;
     box-sizing: border-box;
+    filter: drop-shadow(0 8px 30px rgba(0,0,0,0.15));
 }
 .ask-panel-question {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text, #1a1a1a);
-    margin-bottom: 10px;
+    font-size: 18px;
+    font-weight: 650;
+    color: #1a1a1a;
+    margin-bottom: 16px;
     line-height: 1.5;
+    letter-spacing: -0.01em;
     padding: 0 2px;
 }
-.ask-panel-options {
+.ask-close-btn {
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid #e0e0e0;
+    background: #fff;
+    color: #999;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    padding: 0;
+    z-index: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.ask-close-btn:hover {
+    background: #f5f5f5;
+    color: #1a1a1a;
+    border-color: #ccc;
+}
+.ask-close-btn:active {
+    transform: scale(0.9);
+}
+[data-theme="dark"] .ask-close-btn {
+    background: #333;
+    border-color: #555;
+    color: #888;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .ask-close-btn:hover {
+    background: #444;
+    color: #eee;
+    border-color: #666;
+}
+.ask-panel-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
 }
 .ask-option-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
-    padding: 10px 14px;
-    border-radius: 11px;
-    border: 1px solid var(--border, #e8e8e8);
-    background: var(--card-bg, #fff);
-    color: var(--text, #333);
-    font-size: 13px;
+    padding: 16px 12px;
+    border-radius: 12px;
+    border: 1.5px solid #e8e8e8;
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 15px;
     font-family: inherit;
     cursor: pointer;
-    text-align: left;
+    text-align: center;
     font-weight: 500;
+    letter-spacing: -0.01em;
     transition: all 0.15s ease;
+    line-height: 1.3;
+    min-height: 42px;
+    word-break: break-word;
 }
 .ask-option-btn:hover {
-    background: #f5f5f5;
+    background: #f7f7f7;
     border-color: #d0d0d0;
 }
 .ask-option-btn:active {
-    transform: scale(0.98);
-}
-.ask-option-none {
-    margin-top: 6px;
-    text-align: center;
-    font-weight: 400;
-    font-size: 13px;
-    color: #aaa;
-    border: none;
-    background: transparent;
-    padding: 8px;
-    cursor: pointer;
-}
-.ask-option-none:hover {
-    color: #777;
-    background: transparent;
-}
-[data-theme="dark"] .ask-panel {
-    background: var(--input-bg);
-    border-color: var(--border);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-[data-theme="dark"] .ask-option-btn {
-    background: var(--input-bg);
-    border-color: var(--border);
-    color: var(--text);
-}
-[data-theme="dark"] .ask-option-btn:hover {
-    background: var(--hover-bg);
-    border-color: #444;
-}
-[data-theme="dark"] .ask-option-none {
-    color: #555;
-}
-[data-theme="dark"] .ask-option-none:hover {
-    color: #888;
+    transform: scale(0.96);
+    background: #f0f0f0;
 }
 .ask-block[data-ask-used="true"] {
     opacity: 0.45;
@@ -1998,28 +2100,41 @@ input:checked + .slider::before {
     background: rgba(255,255,255,0.06);
 }
 
+[data-theme="dark"] .ask-panel {
+    filter: drop-shadow(0 8px 30px rgba(0,0,0,0.45));
+}
+[data-theme="dark"] .ask-panel-question {
+    color: #ddd;
+}
+[data-theme="dark"] .ask-option-btn {
+    background: #333;
+    border-color: #444;
+    color: #eee;
+}
+[data-theme="dark"] .ask-option-btn:hover {
+    background: #3a3a3a;
+    border-color: #555;
+}
+
 /* ========== 移动端 Ask 适配 ========== */
 @media (max-width: 768px) {
     .ask-overlay {
         left: 10px !important;
         width: calc(100vw - 20px) !important;
     }
-    .ask-panel {
-        padding: 14px 16px 20px;
-        border-radius: 16px;
-    }
     .ask-panel-question {
-        font-size: 14px;
-        margin-bottom: 12px;
+        font-size: 13px;
+        margin-bottom: 8px;
+    }
+    .ask-panel-options {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
     }
     .ask-option-btn {
-        padding: 12px 14px;
-        font-size: 14px;
-    }
-    .ask-option-none {
-        font-size: 14px;
-        margin-top: 6px;
-        padding: 9px;
+        padding: 10px 6px;
+        font-size: 12px;
+        min-height: 38px;
+        border-radius: 8px;
     }
 }
 

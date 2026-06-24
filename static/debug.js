@@ -27,9 +27,7 @@
         [(_("memory") || "记忆"), memoryEnabled],
         ["Agent", agentEnabled],
         [(_("cothink") || "思维链注入"), cothinkEnabled],
-        [(_("compressOldExec") || "压缩旧执行"), compressOldExecutions],
-        [(_("collapsePluginOutput") || "折叠插件输出"), collapsePluginOutput],
-        [(_("modelAsk") || "模型提问"), askEnabled]
+        [(_("compressOldExec") || "压缩旧执行"), compressOldExecutions]
       ];
       for (let i = 0; i < sw.length; i++) {
         html += '<div class="settings-item" style="padding:5px 0;"><span class="settings-item-label">' + sw[i][0] + '</span><span style="font-size:12px;font-weight:500;color:' + sc(sw[i][1]) + ';">' + st(sw[i][1]) + "</span></div>";
